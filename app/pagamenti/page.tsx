@@ -57,11 +57,13 @@ export default async function PagamentiPage() {
     <main className="shell">
       <section className="content">
         <header className="topbar">
-          <div>
-            <p className="eyebrow">AREA CLIENTE</p>
-            <h1>Pagamenti</h1>
-          </div>
-        </header>
+  <div>
+    <p className="eyebrow">AREA CLIENTE</p>
+    <h1>Pagamenti</h1>
+  </div>
+
+  <a href="/dashboard">← Torna alla Dashboard</a>
+</header>
 
         <div className="grid">
           <div className="card">
