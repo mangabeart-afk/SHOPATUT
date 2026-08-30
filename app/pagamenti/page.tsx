@@ -33,11 +33,9 @@ export default async function PagamentiPage() {
               <h1>Pagamenti</h1>
             </div>
 
-           <form action="/dashboard">
-  <button type="submit">
-    ← Dashboard
-  </button>
-</form>
+          <a href="/dashboard" className="back-button">
+  ← Dashboard
+</a>
           </header>
 
           <section className="panel">
@@ -121,4 +119,26 @@ export default async function PagamentiPage() {
       </section>
     </main>
   )
+}
+.back-button {
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  padding: 10px 18px !important;
+  border-radius: 10px !important;
+  border: 1px solid #d8d8d8 !important;
+  background: #ffffff !important;
+  color: #333333 !important;
+  text-decoration: none !important;
+  font-size: 14px !important;
+  font-weight: 600 !important;
+  line-height: 1 !important;
+  cursor: pointer !important;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08) !important;
+}
+
+.back-button:hover {
+  background: #f5f5f5 !important;
+  color: #222222 !important;
+  text-decoration: none !important;
 }
