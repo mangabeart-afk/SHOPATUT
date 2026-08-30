@@ -74,13 +74,10 @@ const statusLabel = (
   switch (status) {
     case 'IN_ARRIVO':
       return 'IN ARRIVO'
-
     case 'IN_STOCK':
       return 'IN STOCK'
-
     case 'VENDUTO':
       return 'VENDUTO'
-
     default:
       return status
   }
@@ -92,13 +89,10 @@ const statusClass = (
   switch (status) {
     case 'IN_ARRIVO':
       return 'article-status status-arrivo'
-
     case 'IN_STOCK':
       return 'article-status status-stock'
-
     case 'VENDUTO':
       return 'article-status status-venduto'
-
     default:
       return 'article-status'
   }
@@ -107,17 +101,9 @@ const statusClass = (
 /*
  * REGISTRA ARRIVO
  *
- * Gli articoli selezionati devono essere IN ARRIVO.
- * Al momento dell'arrivo viene considerata arrivata
- * tutta la quantità acquistata.
- *
- * Se quantità venduta >= quantità acquistata:
- * VENDUTO
- *
- * Altrimenti:
- * IN STOCK
+ * La logica viene eseguita dal database
+ * tramite register_article_arrival().
  */
-
 async function registerArrival(
   formData: FormData
 ) {
@@ -133,11 +119,12 @@ async function registerArrival(
     redirect('/login')
   }
 
-  const { data: profile } = await supabase
-    .from('profiles')
-    .select('role')
-    .eq('user_id', user.id)
-    .maybeSingle()
+  const { data: profile } =
+    await supabase
+      .from('profiles')
+      .select('role')
+      .eq('user_id', user.id)
+      .maybeSingle()
 
   if (profile?.role !== 'AMMINISTRATORE') {
     redirect('/dashboard')
@@ -145,7 +132,7 @@ async function registerArrival(
 
   const articleIds = formData
     .getAll('article_id')
-    .map((value) => String(value))
+    .map(String)
     .filter(Boolean)
 
   if (articleIds.length === 0) {
@@ -154,91 +141,20 @@ async function registerArrival(
     )
   }
 
-  const { data: selectedArticles, error } =
-    await supabase
-      .from('articles')
-      .select(
-        `
-          id,
-          article_code,
-          quantity_purchased,
-          status
-        `
-      )
-      .in('id', articleIds)
+  const { error } =
+    await supabase.rpc(
+      'register_article_arrival',
+      {
+        p_article_ids: articleIds,
+      }
+    )
 
   if (error) {
     redirect(
       `/admin/articoli?error=${encodeURIComponent(
-        'Impossibile caricare gli articoli selezionati.'
+        error.message
       )}`
     )
-  }
-
-  const { data: sales } = await supabase
-    .from('movements')
-    .select(
-      `
-        article_id,
-        quantity,
-        total_amount_eur
-      `
-    )
-    .eq('movement_type', 'VENDITA')
-    .in('article_id', articleIds)
-
-  const soldByArticle =
-    new Map<string, number>()
-
-  for (const sale of (sales ||
-    []) as Sale[]) {
-    if (!sale.article_id) {
-      continue
-    }
-
-    soldByArticle.set(
-      sale.article_id,
-      (soldByArticle.get(
-        sale.article_id
-      ) || 0) +
-        Number(sale.quantity || 0)
-    )
-  }
-
-  for (const article of selectedArticles || []) {
-    if (article.status !== 'IN_ARRIVO') {
-      continue
-    }
-
-    const purchased = Number(
-      article.quantity_purchased || 0
-    )
-
-    const sold = Number(
-      soldByArticle.get(article.id) || 0
-    )
-
-    const nextStatus =
-      sold >= purchased
-        ? 'VENDUTO'
-        : 'IN_STOCK'
-
-    const { error: updateError } =
-      await supabase
-        .from('articles')
-        .update({
-          status: nextStatus,
-          updated_at: new Date().toISOString(),
-        })
-        .eq('id', article.id)
-
-    if (updateError) {
-      redirect(
-        `/admin/articoli?error=${encodeURIComponent(
-          `Errore aggiornando ${article.article_code}: ${updateError.message}`
-        )}`
-      )
-    }
   }
 
   redirect(
@@ -249,21 +165,9 @@ async function registerArrival(
 /*
  * REGISTRA VENDITA
  *
- * Il form contiene per ogni articolo:
- *
- * selected article_id
- * qty_<article_id>
- * price_<article_id>
- *
- * Il codice cliente viene usato per recuperare:
- *
- * customers
- *      ↓
- * mailboxes
- *
- * Ogni cliente ha una sola casella.
+ * La logica viene eseguita dal database
+ * tramite register_article_sales().
  */
-
 async function registerSale(
   formData: FormData
 ) {
@@ -279,11 +183,12 @@ async function registerSale(
     redirect('/login')
   }
 
-  const { data: profile } = await supabase
-    .from('profiles')
-    .select('role')
-    .eq('user_id', user.id)
-    .maybeSingle()
+  const { data: profile } =
+    await supabase
+      .from('profiles')
+      .select('role')
+      .eq('user_id', user.id)
+      .maybeSingle()
 
   if (profile?.role !== 'AMMINISTRATORE') {
     redirect('/dashboard')
@@ -297,13 +202,13 @@ async function registerSale(
 
   if (!customerCode) {
     redirect(
-      '/admin/articoli?error=Inserisci il codice cliente.'
+      '/admin/articoli?error=Il codice cliente è obbligatorio.'
     )
   }
 
   const articleIds = formData
     .getAll('sale_article_id')
-    .map((value) => String(value))
+    .map(String)
     .filter(Boolean)
 
   if (articleIds.length === 0) {
@@ -312,386 +217,44 @@ async function registerSale(
     )
   }
 
-  /*
-   * CLIENTE
-   */
-
-  const { data: customer } =
-    await supabase
-      .from('customers')
-      .select(
-        `
-          id,
-          customer_code,
-          first_name,
-          last_name
-        `
-      )
-      .eq(
-        'customer_code',
-        customerCode
-      )
-      .maybeSingle()
-
-  if (!customer) {
-    redirect(
-      `/admin/articoli?error=${encodeURIComponent(
-        `Cliente ${customerCode} non trovato.`
-      )}`
-    )
-  }
-
-  /*
-   * CASELLA UNICA
-   */
-
-  const { data: mailbox } =
-    await supabase
-      .from('mailboxes')
-      .select(
-        `
-          id,
-          mailbox_code,
-          customer_id,
-          status
-        `
-      )
-      .eq(
-        'customer_id',
-        customer.id
-      )
-      .maybeSingle()
-
-  if (!mailbox) {
-    redirect(
-      `/admin/articoli?error=${encodeURIComponent(
-        `Il cliente ${customerCode} non ha una casella associata.`
-      )}`
-    )
-  }
-
-  if (mailbox.status !== 'ATTIVA') {
-    redirect(
-      `/admin/articoli?error=${encodeURIComponent(
-        `La casella ${mailbox.mailbox_code} non è attiva.`
-      )}`
-    )
-  }
-
-  /*
-   * ARTICOLI
-   */
-
-  const { data: selectedArticles } =
-    await supabase
-      .from('articles')
-      .select(
-        `
-          id,
-          article_code,
-          quantity_purchased,
-          unit_cost_eur,
-          status
-        `
-      )
-      .in('id', articleIds)
-
-  if (!selectedArticles) {
-    redirect(
-      '/admin/articoli?error=Impossibile caricare gli articoli selezionati.'
-    )
-  }
-
-  /*
-   * VENDITE ESISTENTI
-   */
-
-  const { data: previousSales } =
-    await supabase
-      .from('movements')
-      .select(
-        `
-          article_id,
-          quantity
-        `
-      )
-      .eq(
-        'movement_type',
-        'VENDITA'
-      )
-      .in(
-        'article_id',
-        articleIds
-      )
-
-  const soldByArticle =
-    new Map<string, number>()
-
-  for (const sale of previousSales ||
-    []) {
-    if (!sale.article_id) {
-      continue
-    }
-
-    soldByArticle.set(
-      sale.article_id,
-      (soldByArticle.get(
-        sale.article_id
-      ) || 0) +
-        Number(sale.quantity || 0)
-    )
-  }
-
-  /*
-   * PREPARAZIONE RIGHE
-   */
-
-  const saleRows = []
-
-  for (const article of selectedArticles) {
-    if (
-      article.status !== 'IN_STOCK' &&
-      article.status !== 'IN_ARRIVO'
-    ) {
-      redirect(
-        `/admin/articoli?error=${encodeURIComponent(
-          `${article.article_code} non è vendibile nello stato attuale.`
-        )}`
-      )
-    }
-
-    const quantity = Number(
-      formData.get(
-        `qty_${article.id}`
-      ) || 0
-    )
-
-    const price = Number(
-      formData.get(
-        `price_${article.id}`
-      ) || 0
-    )
-
-    if (
-      !Number.isInteger(quantity) ||
-      quantity <= 0
-    ) {
-      redirect(
-        `/admin/articoli?error=${encodeURIComponent(
-          `Quantità non valida per ${article.article_code}.`
-        )}`
-      )
-    }
-
-    if (
-      !Number.isFinite(price) ||
-      price <= 0
-    ) {
-      redirect(
-        `/admin/articoli?error=${encodeURIComponent(
-          `Prezzo non valido per ${article.article_code}.`
-        )}`
-      )
-    }
-
-    const purchased = Number(
-      article.quantity_purchased || 0
-    )
-
-    const alreadySold = Number(
-      soldByArticle.get(
-        article.id
-      ) || 0
-    )
-
-    const remaining =
-      purchased - alreadySold
-
-    if (quantity > remaining) {
-      redirect(
-        `/admin/articoli?error=${encodeURIComponent(
-          `${article.article_code}: quantità richiesta ${quantity}, disponibilità ${Math.max(
-            0,
-            remaining
-          )}.`
-        )}`
-      )
-    }
-
-    saleRows.push({
-      article,
-      quantity,
-      price,
-      total:
-        quantity * price,
-      remainingAfter:
-        remaining - quantity,
+  const lines = articleIds.map(
+    (articleId) => ({
+      article_id: articleId,
+      quantity: Number(
+        formData.get(
+          `qty_${articleId}`
+        ) || 0
+      ),
+      price: Number(
+        formData.get(
+          `price_${articleId}`
+        ) || 0
+      ),
     })
-  }
+  )
 
-  /*
-   * INSERIMENTO VENDITE
-   */
-
-  for (const row of saleRows) {
-    /*
-     * ASSEGNAZIONE
-     *
-     * Se esiste già un'assegnazione attiva
-     * dello stesso articolo alla stessa casella,
-     * aumentiamo la quantità.
-     */
-
-    const {
-      data: existingAssignment,
-    } = await supabase
-      .from('article_assignments')
-      .select(
-        `
-          id,
-          quantity_assigned,
-          status
-        `
-      )
-      .eq(
-        'article_id',
-        row.article.id
-      )
-      .eq(
-        'mailbox_id',
-        mailbox.id
-      )
-      .eq(
-        'status',
-        'ATTIVA'
-      )
-      .maybeSingle()
-
-    if (existingAssignment) {
-      const {
-        error: assignmentUpdateError,
-      } = await supabase
-        .from('article_assignments')
-        .update({
-          quantity_assigned:
-            Number(
-              existingAssignment.quantity_assigned ||
-                0
-            ) + row.quantity,
-        })
-        .eq(
-          'id',
-          existingAssignment.id
-        )
-
-      if (assignmentUpdateError) {
-        redirect(
-          `/admin/articoli?error=${encodeURIComponent(
-            `Errore assegnazione ${row.article.article_code}: ${assignmentUpdateError.message}`
-          )}`
-        )
+  const { error } =
+    await supabase.rpc(
+      'register_article_sales',
+      {
+        p_customer_code:
+          customerCode,
+        p_lines: lines,
       }
-    } else {
-      const {
-        error: assignmentInsertError,
-      } = await supabase
-        .from('article_assignments')
-        .insert({
-          article_id:
-            row.article.id,
-          mailbox_id:
-            mailbox.id,
-          quantity_assigned:
-            row.quantity,
-          status: 'ATTIVA',
-          notes: `Vendita cliente ${customerCode}`,
-        })
+    )
 
-      if (assignmentInsertError) {
-        redirect(
-          `/admin/articoli?error=${encodeURIComponent(
-            `Errore assegnazione ${row.article.article_code}: ${assignmentInsertError.message}`
-          )}`
-        )
-      }
-    }
-
-    /*
-     * MOVIMENTO VENDITA
-     */
-
-    const {
-      error: movementError,
-    } = await supabase
-      .from('movements')
-      .insert({
-        mailbox_id:
-          mailbox.id,
-        movement_type:
-          'VENDITA',
-        article_id:
-          row.article.id,
-        quantity:
-          row.quantity,
-        unit_price_eur:
-          row.price,
-        total_amount_eur:
-          row.total,
-        reference_code:
-          row.article.article_code,
-        generic_customer_name:
-          null,
-        description:
-          `Vendita ${row.article.article_code} al cliente ${customerCode}`,
-        operator_user_id:
-          user.id,
-      })
-
-    if (movementError) {
-      redirect(
-        `/admin/articoli?error=${encodeURIComponent(
-          `Errore registrazione vendita ${row.article.article_code}: ${movementError.message}`
-        )}`
-      )
-    }
-
-    /*
-     * STATO ARTICOLO
-     */
-
-    const nextStatus =
-      row.article.status ===
-      'IN_ARRIVO'
-        ? 'IN_ARRIVO'
-        : row.remainingAfter === 0
-          ? 'VENDUTO'
-          : 'IN_STOCK'
-
-    const {
-      error: articleUpdateError,
-    } = await supabase
-      .from('articles')
-      .update({
-        status: nextStatus,
-        updated_at:
-          new Date().toISOString(),
-      })
-      .eq(
-        'id',
-        row.article.id
-      )
-
-    if (articleUpdateError) {
-      redirect(
-        `/admin/articoli?error=${encodeURIComponent(
-          `Errore aggiornamento stato ${row.article.article_code}: ${articleUpdateError.message}`
-        )}`
-      )
-    }
+  if (error) {
+    redirect(
+      `/admin/articoli?error=${encodeURIComponent(
+        error.message
+      )}`
+    )
   }
 
   redirect(
-    '/admin/articoli?message=Vendita registrata correttamente.'
+    `/admin/articoli?message=${encodeURIComponent(
+      `Vendita registrata per il cliente ${customerCode}.`
+    )}`
   )
 }
 
@@ -708,11 +271,14 @@ export default async function ArticoliAdminPage({
     redirect('/login')
   }
 
-  const { data: profile } = await supabase
-    .from('profiles')
-    .select('role,display_name')
-    .eq('user_id', user.id)
-    .maybeSingle()
+  const { data: profile } =
+    await supabase
+      .from('profiles')
+      .select(
+        'role,display_name'
+      )
+      .eq('user_id', user.id)
+      .maybeSingle()
 
   if (profile?.role !== 'AMMINISTRATORE') {
     redirect('/dashboard')
@@ -815,10 +381,6 @@ export default async function ArticoliAdminPage({
         `%${selectedSeller}%`
       )
   }
-
-  /*
-   * MOVIMENTI VENDITA
-   */
 
   const [
     articlesResult,
@@ -934,7 +496,7 @@ export default async function ArticoliAdminPage({
       []) as Sale[]
 
   /*
-   * DATI VENDITE
+   * VENDITE PER ARTICOLO
    */
 
   const soldByArticle =
@@ -1175,8 +737,31 @@ export default async function ArticoliAdminPage({
   }
 
   /*
-   * RENDER
+   * ARTICOLI VENDIBILI
    */
+
+  const sellableStats =
+    stats.filter(
+      (row) =>
+        row.available > 0 &&
+        (
+          row.article.status ===
+            'IN_STOCK' ||
+          row.article.status ===
+            'IN_ARRIVO'
+        )
+    )
+
+  /*
+   * ARTICOLI IN ARRIVO
+   */
+
+  const incomingStats =
+    stats.filter(
+      (row) =>
+        row.article.status ===
+        'IN_ARRIVO'
+    )
 
   return (
     <main className="shell">
@@ -1284,7 +869,9 @@ export default async function ArticoliAdminPage({
               <input
                 type="search"
                 name="search"
-                defaultValue={search}
+                defaultValue={
+                  search
+                }
                 placeholder="Codice, serie, descrizione..."
               />
             </label>
@@ -1392,95 +979,95 @@ export default async function ArticoliAdminPage({
           </form>
         </section>
 
-        {/* OPERAZIONI */}
+        {/* REGISTRA ARRIVO */}
 
         <section className="panel">
-          <h2>
-            Operazioni articoli
-          </h2>
+          <h2>Registra arrivo</h2>
 
-          <form
-            action={registerArrival}
-            className="bulk-action-form"
-          >
-            <p className="muted">
-              Seleziona gli articoli
-              <strong>
-                IN ARRIVO
-              </strong>
-              da registrare come
-              arrivati.
-            </p>
+          <p className="muted">
+            Seleziona gli articoli
+            attualmente IN ARRIVO che
+            sono effettivamente arrivati.
+          </p>
 
-            <div className="article-selection-list">
-              {stats
-                .filter(
-                  (row) =>
-                    row.article
-                      .status ===
-                    'IN_ARRIVO'
-                )
-                .map((row) => (
-                  <label
-                    className="article-select-row"
-                    key={`arrival-${row.article.id}`}
-                  >
-                    <input
-                      type="checkbox"
-                      name="article_id"
-                      value={
-                        row.article.id
-                      }
-                    />
-
-                    <span>
-                      <strong>
-                        {
-                          row.article
-                            .article_code
-                        }
-                      </strong>
-
-                      <small>
-                        {
-                          row.article
-                            .quantity_purchased
-                        }{' '}
-                        unità ·{' '}
-                        {row.article
-                          .origin}
-                      </small>
-                    </span>
-                  </label>
-                ))}
+          {incomingStats.length ===
+          0 ? (
+            <div className="empty">
+              Nessun articolo IN ARRIVO
+              corrispondente ai filtri.
             </div>
+          ) : (
+            <form
+              action={registerArrival}
+            >
+              <div className="article-selection-list">
+                {incomingStats.map(
+                  (row) => (
+                    <label
+                      className="article-select-row"
+                      key={row.article.id}
+                    >
+                      <input
+                        type="checkbox"
+                        name="article_id"
+                        value={
+                          row.article.id
+                        }
+                      />
 
-            {stats.filter(
-              (row) =>
-                row.article.status ===
-                'IN_ARRIVO'
-            ).length === 0 && (
-              <div className="empty">
-                Nessun articolo IN ARRIVO
-                corrispondente ai filtri.
+                      <span>
+                        <strong>
+                          {
+                            row.article
+                              .article_code
+                          }
+                        </strong>
+
+                        <small>
+                          Quantità:{' '}
+                          {
+                            row.purchased
+                          }
+                          {' · '}
+                          {
+                            row.article
+                              .origin
+                          }
+                          {' · '}
+                          {
+                            row.article
+                              .series ||
+                            'Senza serie'
+                          }
+                        </small>
+                      </span>
+                    </label>
+                  )
+                )}
               </div>
-            )}
 
-            <button type="submit">
-              Registra arrivo
-            </button>
-          </form>
+              <button type="submit">
+                Registra arrivo
+              </button>
+            </form>
+          )}
+        </section>
 
-          <hr />
+        {/* REGISTRA VENDITA */}
+
+        <section className="panel">
+          <h2>Registra vendita</h2>
+
+          <p className="muted">
+            Inserisci il codice cliente,
+            seleziona gli articoli e
+            indica quantità e prezzo di
+            vendita per ogni articolo.
+          </p>
 
           <form
             action={registerSale}
-            className="bulk-action-form"
           >
-            <h3>
-              Registra vendita
-            </h3>
-
             <label>
               Codice cliente
 
@@ -1493,30 +1080,12 @@ export default async function ArticoliAdminPage({
               />
             </label>
 
-            <p className="muted">
-              Seleziona gli articoli da
-              vendere e indica quantità e
-              prezzo per ciascuno.
-            </p>
-
             <div className="article-selection-list">
-              {stats
-                .filter(
-                  (row) =>
-                    row.available > 0 &&
-                    (
-                      row.article
-                        .status ===
-                        'IN_STOCK' ||
-                      row.article
-                        .status ===
-                        'IN_ARRIVO'
-                    )
-                )
-                .map((row) => (
+              {sellableStats.map(
+                (row) => (
                   <div
                     className="sale-row"
-                    key={`sale-${row.article.id}`}
+                    key={row.article.id}
                   >
                     <label className="sale-check">
                       <input
@@ -1540,8 +1109,9 @@ export default async function ArticoliAdminPage({
                           {statusLabel(
                             row.article
                               .status
-                          )}{' '}
-                          · Disponibili:{' '}
+                          )}
+                          {' · '}
+                          Disponibili:{' '}
                           {
                             row.available
                           }
@@ -1556,7 +1126,9 @@ export default async function ArticoliAdminPage({
                         type="number"
                         name={`qty_${row.article.id}`}
                         min="1"
-                        max={row.available}
+                        max={
+                          row.available
+                        }
                         step="1"
                         defaultValue="1"
                       />
@@ -1574,19 +1146,12 @@ export default async function ArticoliAdminPage({
                       />
                     </label>
                   </div>
-                ))}
+                )
+              )}
             </div>
 
-            {stats.filter(
-              (row) =>
-                row.available > 0 &&
-                (
-                  row.article.status ===
-                  'IN_STOCK' ||
-                  row.article.status ===
-                  'IN_ARRIVO'
-                )
-            ).length === 0 && (
+            {sellableStats.length ===
+              0 && (
               <div className="empty">
                 Nessun articolo disponibile
                 per la vendita.
@@ -1715,7 +1280,7 @@ export default async function ArticoliAdminPage({
           </div>
         </section>
 
-        {/* ANALISI PROVENIENZA */}
+        {/* ANALISI PER PROVENIENZA */}
 
         {originStats.map(
           (originStat) => {
