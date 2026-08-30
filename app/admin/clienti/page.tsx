@@ -56,6 +56,7 @@ export default async function ClientiAdminPage({
         created_at,
         mailboxes (
           id,
+          mailbox_code,
           status
         )
       `
@@ -65,7 +66,10 @@ export default async function ClientiAdminPage({
     })
 
   if (search) {
-    const safeSearch = search.replace(/[%_]/g, '\\$&')
+    const safeSearch = search.replace(
+      /[%_]/g,
+      '\\$&'
+    )
 
     query = query.or(
       `first_name.ilike.%${safeSearch}%,last_name.ilike.%${safeSearch}%,email.ilike.%${safeSearch}%,phone.ilike.%${safeSearch}%`
@@ -83,22 +87,47 @@ export default async function ClientiAdminPage({
           </div>
 
           <nav>
-            <a href="/admin" className="active">
+            <a href="/admin">
               Dashboard
             </a>
-            <a href="/admin/clienti">Clienti</a>
-            <a href="/admin/caselle">Caselle</a>
-            <a href="/admin/articoli">Articoli</a>
-            <a href="/admin/pagamenti">Pagamenti</a>
-            <a href="/admin/crediti">Crediti</a>
-            <a href="/admin/spedizioni">Spedizioni</a>
-            <a href="/admin/movimenti">Movimenti</a>
+
+            <a
+              href="/admin/clienti"
+              className="active"
+            >
+              Clienti
+            </a>
+
+            <a href="/admin/caselle">
+              Caselle
+            </a>
+
+            <a href="/admin/articoli">
+              Articoli
+            </a>
+
+            <a href="/admin/pagamenti">
+              Pagamenti
+            </a>
+
+            <a href="/admin/crediti">
+              Crediti
+            </a>
+
+            <a href="/admin/spedizioni">
+              Spedizioni
+            </a>
+
+            <a href="/admin/movimenti">
+              Movimenti
+            </a>
           </nav>
 
           <div className="side-note">
             V1 • AMMINISTRATORE
             <br />
-            {profile?.display_name || user.email}
+            {profile?.display_name ||
+              user.email}
           </div>
         </aside>
 
@@ -108,6 +137,7 @@ export default async function ClientiAdminPage({
               <p className="eyebrow">
                 AMMINISTRAZIONE
               </p>
+
               <h1>Clienti</h1>
             </div>
 
@@ -180,7 +210,8 @@ export default async function ClientiAdminPage({
         <div className="side-note">
           V1 • AMMINISTRATORE
           <br />
-          {profile?.display_name || user.email}
+          {profile?.display_name ||
+            user.email}
         </div>
       </aside>
 
@@ -212,6 +243,7 @@ export default async function ClientiAdminPage({
           >
             <label>
               Cerca cliente
+
               <input
                 type="search"
                 name="search"
@@ -273,13 +305,15 @@ export default async function ClientiAdminPage({
 
                       {customer.email && (
                         <span>
-                          Email: {customer.email}
+                          Email:{' '}
+                          {customer.email}
                         </span>
                       )}
 
                       {customer.phone && (
                         <span>
-                          Telefono: {customer.phone}
+                          Telefono:{' '}
+                          {customer.phone}
                         </span>
                       )}
 
@@ -292,7 +326,8 @@ export default async function ClientiAdminPage({
 
                       {customer.notes && (
                         <span>
-                          Note: {customer.notes}
+                          Note:{' '}
+                          {customer.notes}
                         </span>
                       )}
                     </div>
@@ -309,11 +344,19 @@ export default async function ClientiAdminPage({
                             <span
                               key={mailbox.id}
                             >
-                              {mailbox.id} —{' '}
+                              {mailbox.mailbox_code}{' '}
+                              —{' '}
                               {mailbox.status}
                             </span>
                           )
                         )}
+
+                      <a
+                        href={`/admin/clienti/${customer.id}`}
+                        className="back-button"
+                      >
+                        Dettaglio →
+                      </a>
                     </div>
                   </div>
                 )
