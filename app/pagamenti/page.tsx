@@ -39,14 +39,15 @@ export default async function PagamentiPage() {
     display: 'inline-flex',
     alignItems: 'center',
     justifyContent: 'center',
-    padding: '10px 16px',
+    padding: '10px 18px',
     borderRadius: '10px',
-    border: '1px solid rgba(255,255,255,0.12)',
-    background: 'rgba(255,255,255,0.06)',
-    color: 'inherit',
+    border: '1px solid #ddd',
+    background: '#fff',
+    color: '#555',
     textDecoration: 'none',
+    fontSize: '14px',
     fontWeight: 600,
-    whiteSpace: 'nowrap',
+    boxShadow: '0 1px 3px rgba(0,0,0,0.08)',
   }}
 >
   ← Dashboard
