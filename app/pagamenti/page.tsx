@@ -33,25 +33,11 @@ export default async function PagamentiPage() {
               <h1>Pagamenti</h1>
             </div>
 
-            <a
-  href="/dashboard"
-  style={{
-    display: 'inline-flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: '10px 18px',
-    borderRadius: '10px',
-    border: '1px solid #ddd',
-    background: '#fff',
-    color: '#555',
-    textDecoration: 'none',
-    fontSize: '14px',
-    fontWeight: 600,
-    boxShadow: '0 1px 3px rgba(0,0,0,0.08)',
-  }}
->
-  ← Dashboard
-</a>
+           <form action="/dashboard">
+  <button type="submit">
+    ← Dashboard
+  </button>
+</form>
           </header>
 
           <section className="panel">
