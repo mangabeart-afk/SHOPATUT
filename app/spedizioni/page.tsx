@@ -1,6 +1,16 @@
 import { redirect } from 'next/navigation'
 import { createClient } from '../../lib/supabase-server'
 
+const formatDate = (value: string | null) => {
+  if (!value) return '—'
+
+  return new Intl.DateTimeFormat('it-IT', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+  }).format(new Date(value))
+}
+
 export default async function SpedizioniPage() {
   const supabase = await createClient()
 
@@ -12,10 +22,55 @@ export default async function SpedizioniPage() {
     redirect('/login')
   }
 
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('mailbox_id')
+    .eq('user_id', user.id)
+    .maybeSingle()
+
+  if (!profile?.mailbox_id) {
+    return (
+      <main className="shell">
+        <section className="content">
+          <header className="topbar">
+            <div>
+              <p className="eyebrow">AREA CLIENTE</p>
+              <h1>Spedizioni</h1>
+            </div>
+          </header>
+
+          <section className="panel">
+            <h2>Le mie spedizioni</h2>
+
+            <div className="empty">
+              Nessuna casella associata al cliente.
+            </div>
+          </section>
+        </section>
+      </main>
+    )
+  }
+
   const { data: shipments, error } = await supabase
     .from('shipments')
-    .select('*')
-    .order('id', { ascending: false })
+    .select(
+      `
+        id,
+        shipment_code,
+        shipped_at,
+        shipment_items (
+          id,
+          quantity_shipped,
+          article_id,
+          articles (
+            article_code,
+            detail
+          )
+        )
+      `
+    )
+    .eq('mailbox_id', profile.mailbox_id)
+    .order('shipped_at', { ascending: false })
 
   if (error) {
     return (
@@ -52,14 +107,6 @@ export default async function SpedizioniPage() {
           </div>
         </header>
 
-        <div className="grid">
-          <div className="card">
-            <div className="muted">Spedizioni</div>
-            <strong>{rows.length}</strong>
-            <small>spedizioni visibili</small>
-          </div>
-        </div>
-
         <section className="panel">
           <h2>Le mie spedizioni</h2>
 
@@ -73,24 +120,22 @@ export default async function SpedizioniPage() {
                 <div className="movement" key={shipment.id}>
                   <div>
                     <b>
-                      Spedizione #{shipment.id}
+                      Spedizione #{shipment.shipment_code || shipment.id}
                     </b>
 
                     <span>
-                      Stato: {shipment.status || '—'}
+                      Data spedizione: {formatDate(shipment.shipped_at)}
                     </span>
-                  </div>
 
-                  <div>
-                    {shipment.tracking_number && (
-                      <span>
-                        Tracking: {shipment.tracking_number}
+                    {shipment.shipment_items?.map((item: any) => (
+                      <span key={item.id}>
+                        {item.articles?.article_code || `Articolo #${item.article_id}`}
+                        {' — '}
+                        {item.articles?.detail || 'Articolo'}
+                        {' — quantità: '}
+                        {Number(item.quantity_shipped || 0)}
                       </span>
-                    )}
-
-                    <strong>
-                      {shipment.carrier || '—'}
-                    </strong>
+                    ))}
                   </div>
                 </div>
               ))}
