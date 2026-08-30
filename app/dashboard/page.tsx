@@ -31,9 +31,9 @@ export default async function Dashboard() {
 
   const { data: profile } = await supabase
     .from('profiles')
-    .select(
-      'role,display_name,customer_id,mailbox_id'
-    )
+ .select(
+  'role,display_name,customer_id,mailbox_id'
+)
     .eq('user_id', user.id)
     .maybeSingle()
 
