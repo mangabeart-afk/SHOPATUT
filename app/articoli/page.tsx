@@ -34,6 +34,10 @@ export default async function ArticoliPage() {
               <p className="eyebrow">AREA CLIENTE</p>
               <h1>Articoli</h1>
             </div>
+
+            <a href="/dashboard" className="back-button">
+              ← Dashboard
+            </a>
           </header>
 
           <section className="panel">
@@ -56,6 +60,10 @@ export default async function ArticoliPage() {
             <p className="eyebrow">AREA CLIENTE</p>
             <h1>Articoli</h1>
           </div>
+
+          <a href="/dashboard" className="back-button">
+            ← Dashboard
+          </a>
         </header>
 
         <section className="panel">
