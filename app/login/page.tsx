@@ -1,10 +1,10 @@
 'use client'
 
-import { FormEvent, useState } from 'react'
+import { FormEvent, Suspense, useState } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { createClient } from '../../lib/supabase-browser'
 
-export default function LoginPage() {
+function LoginForm() {
   const searchParams = useSearchParams()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -29,4 +29,12 @@ export default function LoginPage() {
       <button disabled={loading}>{loading ? 'Accesso…' : 'Accedi'}</button>
     </form>
   </section></main>
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense fallback={<main className="auth-shell"><section className="auth-card"><p className="muted">Caricamento…</p></section></main>}>
+      <LoginForm />
+    </Suspense>
+  )
 }

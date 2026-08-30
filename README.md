@@ -12,4 +12,3 @@ npm run dev
 
 ## Auth
 Il login usa Supabase Auth. La sessione viene mantenuta tramite `@supabase/ssr`; il middleware protegge `/dashboard`. Il ruolo viene letto da `public.profiles` e le query passano attraverso le policy RLS di Supabase.
-V1 collegata a Vercel.
