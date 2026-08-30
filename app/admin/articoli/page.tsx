@@ -7,6 +7,11 @@ type ArticoliAdminPageProps = {
   }>
 }
 
+type ArticleStatus =
+  | 'IN_ARRIVO'
+  | 'IN_STOCK'
+  | 'VENDUTO'
+
 type Article = {
   id: string
   article_code: string
@@ -23,19 +28,13 @@ type Article = {
   total_cost_eur: number | null
   unit_cost_eur: number | null
   notes: string | null
-}
-
-type Assignment = {
-  article_id: string
-  quantity_assigned: number
-  status: string
+  status: ArticleStatus
 }
 
 type Sale = {
   article_id: string | null
   quantity: number | null
   total_amount_eur: number | null
-  mailbox_id: string | null
   movement_type: string
 }
 
@@ -63,6 +62,42 @@ const formatDate = (value: string | null) => {
 
 const normalizeOrigin = (value: string) =>
   value.trim().toUpperCase()
+
+const statusLabel = (
+  status: ArticleStatus
+) => {
+  switch (status) {
+    case 'IN_ARRIVO':
+      return 'IN ARRIVO'
+
+    case 'IN_STOCK':
+      return 'IN STOCK'
+
+    case 'VENDUTO':
+      return 'VENDUTO'
+
+    default:
+      return status
+  }
+}
+
+const statusClass = (
+  status: ArticleStatus
+) => {
+  switch (status) {
+    case 'IN_ARRIVO':
+      return 'article-status status-arrivo'
+
+    case 'IN_STOCK':
+      return 'article-status status-stock'
+
+    case 'VENDUTO':
+      return 'article-status status-venduto'
+
+    default:
+      return 'article-status'
+  }
+}
 
 export default async function ArticoliAdminPage({
   searchParams,
@@ -112,7 +147,8 @@ export default async function ArticoliAdminPage({
         accessory_cost_eur,
         total_cost_eur,
         unit_cost_eur,
-        notes
+        notes,
+        status
       `
     )
     .order('purchase_date', {
@@ -126,26 +162,22 @@ export default async function ArticoliAdminPage({
     )
 
     articlesQuery = articlesQuery.or(
-      `article_code.ilike.%${safeSearch}%,origin.ilike.%${safeSearch}%,seller.ilike.%${safeSearch}%,series.ilike.%${safeSearch}%,detail.ilike.%${safeSearch}%`
+      `article_code.ilike.%${safeSearch}%,origin.ilike.%${safeSearch}%,seller.ilike.%${safeSearch}%,series.ilike.%${safeSearch}%,detail.ilike.%${safeSearch}%,status.ilike.%${safeSearch}%`
     )
   }
 
+  /*
+   * MOVIMENTI DI VENDITA
+   *
+   * L'assegnazione alla casella coincide
+   * con la vendita.
+   */
+
   const [
     articlesResult,
-    assignmentsResult,
     salesResult,
   ] = await Promise.all([
     articlesQuery,
-
-    supabase
-      .from('article_assignments')
-      .select(
-        `
-          article_id,
-          quantity_assigned,
-          status
-        `
-      ),
 
     supabase
       .from('movements')
@@ -154,11 +186,13 @@ export default async function ArticoliAdminPage({
           article_id,
           quantity,
           total_amount_eur,
-          mailbox_id,
           movement_type
         `
       )
-      .eq('movement_type', 'VENDITA'),
+      .eq(
+        'movement_type',
+        'VENDITA'
+      ),
   ])
 
   if (articlesResult.error) {
@@ -247,38 +281,12 @@ export default async function ArticoliAdminPage({
   const articles =
     (articlesResult.data || []) as Article[]
 
-  const assignments =
-    (assignmentsResult.data ||
-      []) as Assignment[]
-
   const sales =
     (salesResult.data || []) as Sale[]
 
   /*
-   * MAPPE DI SUPPORTO
+   * VENDITE PER ARTICOLO
    */
-
-  const assignedByArticle =
-    new Map<string, number>()
-
-  for (const assignment of assignments) {
-    if (assignment.status !== 'ATTIVA') {
-      continue
-    }
-
-    const current =
-      assignedByArticle.get(
-        assignment.article_id
-      ) || 0
-
-    assignedByArticle.set(
-      assignment.article_id,
-      current +
-        Number(
-          assignment.quantity_assigned || 0
-        )
-    )
-  }
 
   const soldByArticle =
     new Map<string, number>()
@@ -299,29 +307,23 @@ export default async function ArticoliAdminPage({
         sale.total_amount_eur || 0
       )
 
-    const currentSold =
-      soldByArticle.get(
-        sale.article_id
-      ) || 0
-
-    const currentRevenue =
-      revenueByArticle.get(
-        sale.article_id
-      ) || 0
-
     soldByArticle.set(
       sale.article_id,
-      currentSold + quantity
+      (soldByArticle.get(
+        sale.article_id
+      ) || 0) + quantity
     )
 
     revenueByArticle.set(
       sale.article_id,
-      currentRevenue + revenue
+      (revenueByArticle.get(
+        sale.article_id
+      ) || 0) + revenue
     )
   }
 
   /*
-   * STATISTICHE ARTICOLI
+   * STATISTICHE
    */
 
   const stats = articles.map(
@@ -331,19 +333,17 @@ export default async function ArticoliAdminPage({
           article.quantity_purchased || 0
         )
 
-      const assigned =
-        Number(
-          assignedByArticle.get(
-            article.id
-          ) || 0
-        )
-
       const sold =
         Number(
           soldByArticle.get(
             article.id
           ) || 0
         )
+
+      const available = Math.max(
+        0,
+        purchased - sold
+      )
 
       const revenue =
         Number(
@@ -356,23 +356,6 @@ export default async function ArticoliAdminPage({
         Number(
           article.unit_cost_eur || 0
         )
-
-      /*
-       * Disponibile = acquistato
-       * - assegnato attivo
-       * - venduto
-       *
-       * In questo modo separiamo
-       * ciò che è ancora libero
-       * da ciò che è già stato
-       * assegnato ai clienti.
-       */
-      const available = Math.max(
-        0,
-        purchased -
-          assigned -
-          sold
-      )
 
       const costOfSold =
         sold * unitCost
@@ -388,7 +371,6 @@ export default async function ArticoliAdminPage({
       return {
         article,
         purchased,
-        assigned,
         sold,
         available,
         revenue,
@@ -400,23 +382,22 @@ export default async function ArticoliAdminPage({
   )
 
   /*
-   * STATISTICHE TOTALI
+   * TOTALI
    */
 
   const total = stats.reduce(
     (acc, row) => {
       acc.purchased += row.purchased
-      acc.assigned += row.assigned
       acc.sold += row.sold
       acc.available += row.available
       acc.revenue += row.revenue
       acc.costOfSold += row.costOfSold
       acc.margin += row.margin
+
       return acc
     },
     {
       purchased: 0,
-      assigned: 0,
       sold: 0,
       available: 0,
       revenue: 0,
@@ -433,7 +414,7 @@ export default async function ArticoliAdminPage({
       : 0
 
   /*
-   * RAGGRUPPAMENTO PROVENIENZA
+   * PROVENIENZA
    */
 
   const origins = [
@@ -452,45 +433,57 @@ export default async function ArticoliAdminPage({
           ) === origin
       )
 
-      return {
-        origin,
-        rows,
-        purchased: rows.reduce(
+      const purchased =
+        rows.reduce(
           (sum, row) =>
             sum + row.purchased,
           0
-        ),
-        assigned: rows.reduce(
-          (sum, row) =>
-            sum + row.assigned,
-          0
-        ),
-        sold: rows.reduce(
+        )
+
+      const sold =
+        rows.reduce(
           (sum, row) =>
             sum + row.sold,
           0
-        ),
-        available: rows.reduce(
+        )
+
+      const available =
+        rows.reduce(
           (sum, row) =>
             sum + row.available,
           0
-        ),
-        revenue: rows.reduce(
+        )
+
+      const revenue =
+        rows.reduce(
           (sum, row) =>
             sum + row.revenue,
           0
-        ),
-        costOfSold:
-          rows.reduce(
-            (sum, row) =>
-              sum + row.costOfSold,
-            0
-          ),
-        margin: rows.reduce(
+        )
+
+      const costOfSold =
+        rows.reduce(
+          (sum, row) =>
+            sum + row.costOfSold,
+          0
+        )
+
+      const margin =
+        rows.reduce(
           (sum, row) =>
             sum + row.margin,
           0
-        ),
+        )
+
+      return {
+        origin,
+        rows,
+        purchased,
+        sold,
+        available,
+        revenue,
+        costOfSold,
+        margin,
       }
     }
   )
@@ -501,10 +494,13 @@ export default async function ArticoliAdminPage({
     switch (origin) {
       case 'GIAPPONE':
         return '🇯🇵 Giappone'
+
       case 'VIETNAM':
         return '🇻🇳 Vietnam'
+
       case 'EUROPA':
         return '🇪🇺 Europa'
+
       default:
         return 'Altro'
     }
@@ -597,7 +593,7 @@ export default async function ArticoliAdminPage({
                 type="search"
                 name="search"
                 defaultValue={search}
-                placeholder="Codice, serie, descrizione, venditore, provenienza..."
+                placeholder="Codice, serie, descrizione, venditore, provenienza, stato..."
               />
             </label>
 
@@ -619,7 +615,9 @@ export default async function ArticoliAdminPage({
         {/* MONITORAGGIO COMPLESSIVO */}
 
         <section className="panel">
-          <h2>Monitoraggio complessivo</h2>
+          <h2>
+            Monitoraggio complessivo
+          </h2>
 
           <div className="grid">
             <div className="card">
@@ -633,20 +631,6 @@ export default async function ArticoliAdminPage({
 
               <small>
                 unità acquistate
-              </small>
-            </div>
-
-            <div className="card">
-              <div className="muted">
-                Assegnati
-              </div>
-
-              <strong>
-                {number(total.assigned)}
-              </strong>
-
-              <small>
-                unità assegnate
               </small>
             </div>
 
@@ -674,7 +658,7 @@ export default async function ArticoliAdminPage({
               </strong>
 
               <small>
-                unità ancora libere
+                quantità residua
               </small>
             </div>
 
@@ -698,11 +682,13 @@ export default async function ArticoliAdminPage({
               </div>
 
               <strong>
-                {money(total.costOfSold)}
+                {money(
+                  total.costOfSold
+                )}
               </strong>
 
               <small>
-                costo degli articoli venduti
+                costo delle unità vendute
               </small>
             </div>
 
@@ -726,7 +712,9 @@ export default async function ArticoliAdminPage({
               </div>
 
               <strong>
-                {percent(totalMarginPercent)}
+                {percent(
+                  totalMarginPercent
+                )}
               </strong>
 
               <small>
@@ -736,7 +724,7 @@ export default async function ArticoliAdminPage({
           </div>
         </section>
 
-        {/* ANALISI PER PROVENIENZA */}
+        {/* ANALISI PROVENIENZA */}
 
         {originStats.map(
           (originStat) => {
@@ -767,18 +755,6 @@ export default async function ArticoliAdminPage({
                     <strong>
                       {number(
                         originStat.purchased
-                      )}
-                    </strong>
-                  </div>
-
-                  <div className="card">
-                    <div className="muted">
-                      Assegnati
-                    </div>
-
-                    <strong>
-                      {number(
-                        originStat.assigned
                       )}
                     </strong>
                   </div>
@@ -860,7 +836,7 @@ export default async function ArticoliAdminPage({
           }
         )}
 
-        {/* ELENCO ARTICOLI */}
+        {/* ELENCO */}
 
         <section className="panel">
           <h2>
@@ -886,6 +862,17 @@ export default async function ArticoliAdminPage({
                     <b>
                       {row.article.article_code}
                     </b>
+
+                    <span
+                      className={statusClass(
+                        row.article.status
+                      )}
+                    >
+                      Stato:{' '}
+                      {statusLabel(
+                        row.article.status
+                      )}
+                    </span>
 
                     {row.article.series && (
                       <span>
@@ -924,22 +911,23 @@ export default async function ArticoliAdminPage({
                   <div>
                     <span>
                       Acquistati:{' '}
-                      {number(row.purchased)}
-                    </span>
-
-                    <span>
-                      Assegnati:{' '}
-                      {number(row.assigned)}
+                      {number(
+                        row.purchased
+                      )}
                     </span>
 
                     <span>
                       Venduti:{' '}
-                      {number(row.sold)}
+                      {number(
+                        row.sold
+                      )}
                     </span>
 
                     <span>
                       Disponibili:{' '}
-                      {number(row.available)}
+                      {number(
+                        row.available
+                      )}
                     </span>
 
                     <span>
@@ -955,13 +943,24 @@ export default async function ArticoliAdminPage({
 
                     <span>
                       Ricavi:{' '}
-                      {money(row.revenue)}
+                      {money(
+                        row.revenue
+                      )}
                     </span>
 
                     <strong>
                       Margine:{' '}
-                      {money(row.margin)}
+                      {money(
+                        row.margin
+                      )}
                     </strong>
+
+                    <a
+                      href={`/admin/articoli/${row.article.id}`}
+                      className="back-button"
+                    >
+                      Dettaglio →
+                    </a>
                   </div>
                 </div>
               ))}
