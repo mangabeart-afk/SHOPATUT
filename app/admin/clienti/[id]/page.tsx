@@ -7,6 +7,16 @@ type PageProps = {
   }>
 }
 
+const formatDate = (value: string | null) => {
+  if (!value) return '—'
+
+  return new Intl.DateTimeFormat('it-IT', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+  }).format(new Date(value))
+}
+
 export default async function ClienteDetailPage({
   params,
 }: PageProps) {
@@ -42,14 +52,11 @@ export default async function ClienteDetailPage({
         email,
         phone,
         notes,
-        created_at,
-        mailboxes (
-          id,
-          mailbox_code,
-          status,
-          opened_at,
-          notes
-        )
+        shipping_address,
+        shipping_city,
+        shipping_postal_code,
+        shipping_country,
+        created_at
       `
     )
     .eq('id', id)
@@ -58,12 +65,6 @@ export default async function ClienteDetailPage({
   if (error || !customer) {
     notFound()
   }
-
-  const mailboxes = Array.isArray(customer.mailboxes)
-    ? customer.mailboxes
-    : customer.mailboxes
-      ? [customer.mailboxes]
-      : []
 
   return (
     <main className="shell">
@@ -137,6 +138,7 @@ export default async function ClienteDetailPage({
           </a>
         </header>
 
+        {/* ANAGRAFICA */}
         <section className="panel">
           <h2>Anagrafica cliente</h2>
 
@@ -146,7 +148,7 @@ export default async function ClienteDetailPage({
                 Nome
               </div>
 
-              <strong>
+              <strong className="customer-value">
                 {customer.first_name}{' '}
                 {customer.last_name}
               </strong>
@@ -157,7 +159,7 @@ export default async function ClienteDetailPage({
                 Email
               </div>
 
-              <strong>
+              <strong className="customer-value">
                 {customer.email || '—'}
               </strong>
             </div>
@@ -167,134 +169,124 @@ export default async function ClienteDetailPage({
                 Telefono
               </div>
 
-              <strong>
+              <strong className="customer-value">
                 {customer.phone || '—'}
               </strong>
             </div>
 
             <div className="card">
               <div className="muted">
-                Caselle
+                Cliente dal
               </div>
 
-              <strong>
-                {mailboxes.length}
+              <strong className="customer-value">
+                {formatDate(
+                  customer.created_at
+                )}
               </strong>
             </div>
           </div>
 
           {customer.notes && (
-            <div className="empty">
+            <div className="customer-notes">
               <b>Note:</b>{' '}
               {customer.notes}
             </div>
           )}
         </section>
 
+        {/* INDIRIZZO */}
         <section className="panel">
-          <h2>Caselle associate</h2>
+          <h2>Indirizzo di spedizione</h2>
 
-          {mailboxes.length === 0 ? (
+          {!customer.shipping_address &&
+          !customer.shipping_city &&
+          !customer.shipping_postal_code &&
+          !customer.shipping_country ? (
             <div className="empty">
-              Nessuna casella associata.
+              Nessun indirizzo di spedizione
+              registrato.
             </div>
           ) : (
-            <div className="movement-list">
-              {mailboxes.map((mailbox) => (
-                <div
-                  className="movement"
-                  key={mailbox.id}
-                >
-                  <div>
-                    <b>
-                      {mailbox.mailbox_code}
-                    </b>
+            <div className="shipping-address">
+              {customer.shipping_address && (
+                <strong>
+                  {customer.shipping_address}
+                </strong>
+              )}
 
-                    <span>
-                      Stato:{' '}
-                      {mailbox.status}
-                    </span>
+              {(customer.shipping_postal_code ||
+                customer.shipping_city) && (
+                <span>
+                  {customer.shipping_postal_code}{' '}
+                  {customer.shipping_city}
+                </span>
+              )}
 
-                    <span>
-                      Apertura:{' '}
-                      {mailbox.opened_at
-                        ? new Intl.DateTimeFormat(
-                            'it-IT'
-                          ).format(
-                            new Date(
-                              mailbox.opened_at
-                            )
-                          )
-                        : '—'}
-                    </span>
-
-                    {mailbox.notes && (
-                      <span>
-                        Note:{' '}
-                        {mailbox.notes}
-                      </span>
-                    )}
-                  </div>
-                </div>
-              ))}
+              {customer.shipping_country && (
+                <span>
+                  {customer.shipping_country}
+                </span>
+              )}
             </div>
           )}
         </section>
 
+        {/* GESTIONE */}
         <section className="panel">
           <h2>Gestione cliente</h2>
 
-          <div className="grid">
+          <div className="customer-actions">
             <a
               href={`/admin/articoli?customer=${customer.id}`}
-              className="card"
+              className="customer-action"
             >
-              <div className="muted">
+              <span className="customer-action-title">
                 Articoli
-              </div>
+              </span>
 
-              <strong>
-                Vai agli articoli →
-              </strong>
+              <span className="customer-action-text">
+                Gestisci gli articoli →
+              </span>
             </a>
 
             <a
               href={`/admin/pagamenti?customer=${customer.id}`}
-              className="card"
+              className="customer-action"
             >
-              <div className="muted">
+              <span className="customer-action-title">
                 Pagamenti
-              </div>
+              </span>
 
-              <strong>
-                Vai ai pagamenti →
-              </strong>
+              <span className="customer-action-text">
+                Gestisci i pagamenti →
+              </span>
             </a>
 
             <a
               href={`/admin/crediti?customer=${customer.id}`}
-              className="card"
+              className="customer-action"
             >
-              <div className="muted">
+              <span className="customer-action-title">
                 Crediti
-              </div>
+              </span>
 
-              <strong>
-                Vai ai crediti →
-              </strong>
+              <span className="customer-action-text">
+                Gestisci i crediti →
+              </span>
             </a>
 
             <a
               href={`/admin/movimenti?customer=${customer.id}`}
-              className="card"
+              className="customer-action"
             >
-              <div className="muted">
+              <span className="customer-action-title">
                 Movimenti
-              </div>
+              </span>
 
-              <strong>
-                Vai ai movimenti →
-              </strong>
+              <span className="customer-action-text">
+                Visualizza i movimenti →
+              </span>
             </a>
           </div>
         </section>
