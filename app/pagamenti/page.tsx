@@ -33,9 +33,24 @@ export default async function PagamentiPage() {
               <h1>Pagamenti</h1>
             </div>
 
-            <a href="/dashboard" className="back-button">
-              ← Dashboard
-            </a>
+            <a
+  href="/dashboard"
+  style={{
+    display: 'inline-flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: '10px 16px',
+    borderRadius: '10px',
+    border: '1px solid rgba(255,255,255,0.12)',
+    background: 'rgba(255,255,255,0.06)',
+    color: 'inherit',
+    textDecoration: 'none',
+    fontWeight: 600,
+    whiteSpace: 'nowrap',
+  }}
+>
+  ← Dashboard
+</a>
           </header>
 
           <section className="panel">
