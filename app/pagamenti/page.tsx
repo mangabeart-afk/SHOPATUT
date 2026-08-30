@@ -33,13 +33,14 @@ export default async function PagamentiPage() {
               <h1>Pagamenti</h1>
             </div>
 
-          <a href="/dashboard" className="back-button">
-  ← Dashboard
-</a>
+            <a href="/dashboard" className="back-button">
+              ← Dashboard
+            </a>
           </header>
 
           <section className="panel">
             <h2>I miei pagamenti</h2>
+
             <div className="empty">
               Impossibile caricare i pagamenti.
             </div>
