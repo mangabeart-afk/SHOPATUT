@@ -43,9 +43,20 @@ export default async function CaselleAdminPage({
   const params = await searchParams
   const search = params.search?.trim() || ''
 
+  /*
+   * CLIENTI
+   */
+
   const { data: customers } = await supabase
     .from('customers')
-    .select('id,first_name,last_name,email')
+    .select(
+      `
+        id,
+        first_name,
+        last_name,
+        email
+      `
+    )
 
   const customerMap = new Map(
     (customers || []).map((customer) => [
@@ -54,36 +65,27 @@ export default async function CaselleAdminPage({
     ])
   )
 
-  let query = supabase
-    .from('mailboxes')
-    .select(
-      `
-        id,
-        mailbox_code,
-        customer_id,
-        status,
-        opened_at,
-        notes,
-        created_at
-      `
-    )
-    .order('mailbox_code', {
-      ascending: true,
-    })
-
-  if (search) {
-    const safeSearch = search.replace(
-      /[%_]/g,
-      '\\$&'
-    )
-
-    query = query.or(
-      `mailbox_code.ilike.%${safeSearch}%,status.ilike.%${safeSearch}%`
-    )
-  }
+  /*
+   * CASELLE
+   */
 
   const { data: mailboxes, error } =
-    await query
+    await supabase
+      .from('mailboxes')
+      .select(
+        `
+          id,
+          mailbox_code,
+          customer_id,
+          status,
+          opened_at,
+          notes,
+          created_at
+        `
+      )
+      .order('mailbox_code', {
+        ascending: true,
+      })
 
   if (error) {
     return (
@@ -97,27 +99,34 @@ export default async function CaselleAdminPage({
             <a href="/admin">
               Dashboard
             </a>
+
             <a href="/admin/clienti">
               Clienti
             </a>
+
             <a
               href="/admin/caselle"
               className="active"
             >
               Caselle
             </a>
+
             <a href="/admin/articoli">
               Articoli
             </a>
+
             <a href="/admin/pagamenti">
               Pagamenti
             </a>
+
             <a href="/admin/crediti">
               Crediti
             </a>
+
             <a href="/admin/spedizioni">
               Spedizioni
             </a>
+
             <a href="/admin/movimenti">
               Movimenti
             </a>
@@ -137,6 +146,7 @@ export default async function CaselleAdminPage({
               <p className="eyebrow">
                 AMMINISTRAZIONE
               </p>
+
               <h1>Caselle</h1>
             </div>
 
@@ -161,6 +171,10 @@ export default async function CaselleAdminPage({
   }
 
   const rows = mailboxes || []
+
+  /*
+   * RICERCA
+   */
 
   const filteredRows = search
     ? rows.filter((mailbox) => {
@@ -256,6 +270,8 @@ export default async function CaselleAdminPage({
           </a>
         </header>
 
+        {/* RICERCA */}
+
         <section className="panel">
           <h2>Ricerca caselle</h2>
 
@@ -289,6 +305,8 @@ export default async function CaselleAdminPage({
             )}
           </form>
         </section>
+
+        {/* ELENCO */}
 
         <section className="panel">
           <h2>
@@ -339,7 +357,7 @@ export default async function CaselleAdminPage({
                         )}
 
                         <span>
-                          Apertura:{' '}
+                          Data apertura:{' '}
                           {formatDate(
                             mailbox.opened_at
                           )}
@@ -356,7 +374,9 @@ export default async function CaselleAdminPage({
                       <div>
                         <span>
                           Stato:{' '}
-                          {mailbox.status}
+                          <strong>
+                            {mailbox.status}
+                          </strong>
                         </span>
 
                         <span>
