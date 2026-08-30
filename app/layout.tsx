@@ -2,7 +2,7 @@ import "./globals.css";
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: "MangaBEART [ShopÄWAY]",
+  title: "MangaBEART [ShopaTüT]",
   description: "Gestione caselle, articoli, pagamenti, crediti e spedizioni"
 };
 
