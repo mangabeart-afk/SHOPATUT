@@ -37,6 +37,10 @@ export default async function SpedizioniPage() {
               <p className="eyebrow">AREA CLIENTE</p>
               <h1>Spedizioni</h1>
             </div>
+
+            <a href="/dashboard" className="back-button">
+              ← Dashboard
+            </a>
           </header>
 
           <section className="panel">
@@ -81,6 +85,10 @@ export default async function SpedizioniPage() {
               <p className="eyebrow">AREA CLIENTE</p>
               <h1>Spedizioni</h1>
             </div>
+
+            <a href="/dashboard" className="back-button">
+              ← Dashboard
+            </a>
           </header>
 
           <section className="panel">
@@ -105,6 +113,10 @@ export default async function SpedizioniPage() {
             <p className="eyebrow">AREA CLIENTE</p>
             <h1>Spedizioni</h1>
           </div>
+
+          <a href="/dashboard" className="back-button">
+            ← Dashboard
+          </a>
         </header>
 
         <section className="panel">
@@ -117,25 +129,36 @@ export default async function SpedizioniPage() {
           ) : (
             <div className="movement-list">
               {rows.map((shipment: any) => (
-                <div className="movement" key={shipment.id}>
+                <div
+                  className="movement"
+                  key={shipment.id}
+                >
                   <div>
                     <b>
-                      Spedizione #{shipment.shipment_code || shipment.id}
+                      Spedizione #
+                      {shipment.shipment_code || shipment.id}
                     </b>
 
                     <span>
-                      Data spedizione: {formatDate(shipment.shipped_at)}
+                      Data spedizione:{' '}
+                      {formatDate(shipment.shipped_at)}
                     </span>
 
-                    {shipment.shipment_items?.map((item: any) => (
-                      <span key={item.id}>
-                        {item.articles?.article_code || `Articolo #${item.article_id}`}
-                        {' — '}
-                        {item.articles?.detail || 'Articolo'}
-                        {' — quantità: '}
-                        {Number(item.quantity_shipped || 0)}
-                      </span>
-                    ))}
+                    {shipment.shipment_items?.map(
+                      (item: any) => (
+                        <span key={item.id}>
+                          {item.articles?.article_code ||
+                            `Articolo #${item.article_id}`}
+                          {' — '}
+                          {item.articles?.detail ||
+                            'Articolo'}
+                          {' — quantità: '}
+                          {Number(
+                            item.quantity_shipped || 0
+                          )}
+                        </span>
+                      )
+                    )}
                   </div>
                 </div>
               ))}
