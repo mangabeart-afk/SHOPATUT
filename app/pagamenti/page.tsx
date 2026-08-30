@@ -62,7 +62,9 @@ export default async function PagamentiPage() {
     <h1>Pagamenti</h1>
   </div>
 
-  <a href="/dashboard">← Torna alla Dashboard</a>
+  <a href="/dashboard" className="back-button">
+  ← Dashboard
+</a>
 </header>
 
         <div className="grid">
