@@ -43,17 +43,17 @@ type Sale = {
   total_amount_eur: number | null
 }
 
-const money = (n: number) =>
+const money = (value: number) =>
   new Intl.NumberFormat('it-IT', {
     style: 'currency',
     currency: 'EUR',
-  }).format(n || 0)
+  }).format(value || 0)
 
-const number = (n: number) =>
-  new Intl.NumberFormat('it-IT').format(n || 0)
+const number = (value: number) =>
+  new Intl.NumberFormat('it-IT').format(value || 0)
 
-const percent = (n: number) =>
-  `${n.toFixed(1)}%`
+const percent = (value: number) =>
+  `${value.toFixed(1)}%`
 
 const formatDate = (value: string | null) => {
   if (!value) return '—'
@@ -74,10 +74,13 @@ const statusLabel = (
   switch (status) {
     case 'IN_ARRIVO':
       return 'IN ARRIVO'
+
     case 'IN_STOCK':
       return 'IN STOCK'
+
     case 'VENDUTO':
       return 'VENDUTO'
+
     default:
       return status
   }
@@ -89,21 +92,24 @@ const statusClass = (
   switch (status) {
     case 'IN_ARRIVO':
       return 'article-status status-arrivo'
+
     case 'IN_STOCK':
       return 'article-status status-stock'
+
     case 'VENDUTO':
       return 'article-status status-venduto'
+
     default:
       return 'article-status'
   }
 }
 
 /*
+ * ============================
  * REGISTRA ARRIVO
- *
- * La logica viene eseguita dal database
- * tramite register_article_arrival().
+ * ============================
  */
+
 async function registerArrival(
   formData: FormData
 ) {
@@ -132,7 +138,7 @@ async function registerArrival(
 
   const articleIds = formData
     .getAll('article_id')
-    .map(String)
+    .map((value) => String(value))
     .filter(Boolean)
 
   if (articleIds.length === 0) {
@@ -163,11 +169,11 @@ async function registerArrival(
 }
 
 /*
+ * ============================
  * REGISTRA VENDITA
- *
- * La logica viene eseguita dal database
- * tramite register_article_sales().
+ * ============================
  */
+
 async function registerSale(
   formData: FormData
 ) {
@@ -208,7 +214,7 @@ async function registerSale(
 
   const articleIds = formData
     .getAll('sale_article_id')
-    .map(String)
+    .map((value) => String(value))
     .filter(Boolean)
 
   if (articleIds.length === 0) {
@@ -257,6 +263,12 @@ async function registerSale(
     )}`
   )
 }
+
+/*
+ * ============================
+ * PAGINA
+ * ============================
+ */
 
 export default async function ArticoliAdminPage({
   searchParams,
@@ -308,7 +320,9 @@ export default async function ArticoliAdminPage({
     params.error?.trim() || ''
 
   /*
+   * ============================
    * QUERY ARTICOLI
+   * ============================
    */
 
   let articlesQuery = supabase
@@ -403,6 +417,12 @@ export default async function ArticoliAdminPage({
       ),
   ])
 
+  /*
+   * ============================
+   * ERRORI
+   * ============================
+   */
+
   if (articlesResult.error) {
     return (
       <main className="shell">
@@ -496,7 +516,9 @@ export default async function ArticoliAdminPage({
       []) as Sale[]
 
   /*
+   * ============================
    * VENDITE PER ARTICOLO
+   * ============================
    */
 
   const soldByArticle =
@@ -533,7 +555,9 @@ export default async function ArticoliAdminPage({
   }
 
   /*
+   * ============================
    * STATISTICHE
+   * ============================
    */
 
   const stats = articles.map(
@@ -596,7 +620,9 @@ export default async function ArticoliAdminPage({
   )
 
   /*
+   * ============================
    * TOTALI
+   * ============================
    */
 
   const total = stats.reduce(
@@ -639,7 +665,9 @@ export default async function ArticoliAdminPage({
       : 0
 
   /*
+   * ============================
    * PROVENIENZE
+   * ============================
    */
 
   const origins = [
@@ -702,7 +730,8 @@ export default async function ArticoliAdminPage({
         const margin =
           rows.reduce(
             (sum, row) =>
-              sum + row.margin,
+              sum +
+              row.margin,
             0
           )
 
@@ -737,8 +766,17 @@ export default async function ArticoliAdminPage({
   }
 
   /*
-   * ARTICOLI VENDIBILI
+   * ============================
+   * LISTE OPERATIVE
+   * ============================
    */
+
+  const incomingStats =
+    stats.filter(
+      (row) =>
+        row.article.status ===
+        'IN_ARRIVO'
+    )
 
   const sellableStats =
     stats.filter(
@@ -753,15 +791,10 @@ export default async function ArticoliAdminPage({
     )
 
   /*
-   * ARTICOLI IN ARRIVO
+   * ============================
+   * RENDER
+   * ============================
    */
-
-  const incomingStats =
-    stats.filter(
-      (row) =>
-        row.article.status ===
-        'IN_ARRIVO'
-    )
 
   return (
     <main className="shell">
@@ -982,12 +1015,14 @@ export default async function ArticoliAdminPage({
         {/* REGISTRA ARRIVO */}
 
         <section className="panel">
-          <h2>Registra arrivo</h2>
+          <h2>
+            Registra arrivo
+          </h2>
 
           <p className="muted">
-            Seleziona gli articoli
-            attualmente IN ARRIVO che
-            sono effettivamente arrivati.
+            Seleziona tutti gli articoli
+            arrivati e conferma in un'unica
+            operazione.
           </p>
 
           {incomingStats.length ===
@@ -999,13 +1034,35 @@ export default async function ArticoliAdminPage({
           ) : (
             <form
               action={registerArrival}
+              className="bulk-action-form"
             >
               <div className="article-selection-list">
+                <label className="article-select-row">
+                  <input
+                    type="checkbox"
+                    aria-label="Seleziona tutti gli articoli in arrivo"
+                  />
+
+                  <span>
+                    <strong>
+                      Selezione multipla
+                    </strong>
+
+                    <small>
+                      Utilizza le singole
+                      caselle sotto per
+                      scegliere gli articoli
+                    </small>
+                  </span>
+                </label>
+
                 {incomingStats.map(
                   (row) => (
                     <label
                       className="article-select-row"
-                      key={row.article.id}
+                      key={
+                        row.article.id
+                      }
                     >
                       <input
                         type="checkbox"
@@ -1034,11 +1091,9 @@ export default async function ArticoliAdminPage({
                               .origin
                           }
                           {' · '}
-                          {
-                            row.article
-                              .series ||
-                            'Senza serie'
-                          }
+                          {row.article
+                            .series ||
+                            'Senza serie'}
                         </small>
                       </span>
                     </label>
@@ -1056,17 +1111,20 @@ export default async function ArticoliAdminPage({
         {/* REGISTRA VENDITA */}
 
         <section className="panel">
-          <h2>Registra vendita</h2>
+          <h2>
+            Registra vendita
+          </h2>
 
           <p className="muted">
             Inserisci il codice cliente,
-            seleziona gli articoli e
-            indica quantità e prezzo di
-            vendita per ogni articolo.
+            seleziona gli articoli e indica
+            quantità e prezzo di vendita per
+            ciascuno.
           </p>
 
           <form
             action={registerSale}
+            className="bulk-action-form"
           >
             <label>
               Codice cliente
@@ -1085,7 +1143,9 @@ export default async function ArticoliAdminPage({
                 (row) => (
                   <div
                     className="sale-row"
-                    key={row.article.id}
+                    key={
+                      row.article.id
+                    }
                   >
                     <label className="sale-check">
                       <input
@@ -1158,13 +1218,16 @@ export default async function ArticoliAdminPage({
               </div>
             )}
 
-            <button type="submit">
-              Registra vendita
-            </button>
+            {sellableStats.length >
+              0 && (
+              <button type="submit">
+                Registra vendita
+              </button>
+            )}
           </form>
         </section>
 
-        {/* MONITORAGGIO COMPLESSIVO */}
+        {/* MONITORAGGIO */}
 
         <section className="panel">
           <h2>
@@ -1224,7 +1287,9 @@ export default async function ArticoliAdminPage({
               </div>
 
               <strong>
-                {money(total.revenue)}
+                {money(
+                  total.revenue
+                )}
               </strong>
 
               <small>
@@ -1280,7 +1345,7 @@ export default async function ArticoliAdminPage({
           </div>
         </section>
 
-        {/* ANALISI PER PROVENIENZA */}
+        {/* ANALISI PROVENIENZA */}
 
         {originStats.map(
           (originStat) => {
@@ -1414,21 +1479,28 @@ export default async function ArticoliAdminPage({
               {stats.map((row) => (
                 <div
                   className="movement"
-                  key={row.article.id}
+                  key={
+                    row.article.id
+                  }
                 >
                   <div>
                     <b>
-                      {row.article.article_code}
+                      {
+                        row.article
+                          .article_code
+                      }
                     </b>
 
                     <span
                       className={statusClass(
-                        row.article.status
+                        row.article
+                          .status
                       )}
                     >
                       Stato:{' '}
                       {statusLabel(
-                        row.article.status
+                        row.article
+                          .status
                       )}
                     </span>
 
@@ -1441,19 +1513,26 @@ export default async function ArticoliAdminPage({
 
                     {row.article.detail && (
                       <span>
-                        {row.article.detail}
+                        {
+                          row.article.detail
+                        }
                       </span>
                     )}
 
                     <span>
                       Provenienza:{' '}
-                      {row.article.origin}
+                      {
+                        row.article
+                          .origin
+                      }
                     </span>
 
                     {row.article.seller && (
                       <span>
                         Venditore:{' '}
-                        {row.article.seller}
+                        {
+                          row.article.seller
+                        }
                       </span>
                     )}
 
@@ -1476,7 +1555,9 @@ export default async function ArticoliAdminPage({
 
                     <span>
                       Venduti:{' '}
-                      {number(row.sold)}
+                      {number(
+                        row.sold
+                      )}
                     </span>
 
                     <span>
