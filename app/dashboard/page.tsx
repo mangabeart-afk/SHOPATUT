@@ -31,9 +31,9 @@ export default async function Dashboard() {
 
   const { data: profile } = await supabase
     .from('profiles')
- .select(
-  'role,display_name,customer_id,mailbox_id'
-)
+    .select(
+      'role,display_name,customer_id,mailbox_id'
+    )
     .eq('user_id', user.id)
     .maybeSingle()
 
@@ -44,6 +44,7 @@ export default async function Dashboard() {
   /*
    * DATI CLIENTE
    */
+
   let customer = null
 
   if (customerId) {
@@ -52,6 +53,7 @@ export default async function Dashboard() {
       .select(
         `
           id,
+          customer_code,
           first_name,
           last_name,
           email,
@@ -70,8 +72,9 @@ export default async function Dashboard() {
   }
 
   /*
-   * DATI ECONOMICI / ARTICOLI
+   * ASSEGNAZIONI ARTICOLI
    */
+
   let assignments: {
     article_id: string
     quantity_assigned: number
@@ -90,10 +93,13 @@ export default async function Dashboard() {
     assignments = data || []
   }
 
-  const articleIds =
-    assignments.map(
-      (item) => item.article_id
-    )
+  const articleIds = assignments.map(
+    (item) => item.article_id
+  )
+
+  /*
+   * DATI DASHBOARD
+   */
 
   const [
     articlesResult,
@@ -173,7 +179,9 @@ export default async function Dashboard() {
     mailboxId
       ? supabase
           .from('mailboxes')
-          .select('id,status')
+          .select(
+            'id,status,mailbox_code'
+          )
           .eq('id', mailboxId)
           .maybeSingle()
       : Promise.resolve({
@@ -312,53 +320,56 @@ export default async function Dashboard() {
             </div>
           ) : (
             <div className="customer-details">
-              <div className="customer-detail">
+              <div className="customer-detail-row">
                 <span className="muted">
                   Codice cliente
                 </span>
 
-                <strong>
-                  {customer.id}
+                <strong className="customer-value">
+                  {customer.customer_code ||
+                    '—'}
                 </strong>
               </div>
 
-              <div className="customer-detail">
+              <div className="customer-detail-row">
                 <span className="muted">
                   Nome
                 </span>
 
-                <strong>
+                <strong className="customer-value">
                   {customer.first_name}{' '}
                   {customer.last_name}
                 </strong>
               </div>
 
-              <div className="customer-detail">
+              <div className="customer-detail-row">
                 <span className="muted">
                   Email
                 </span>
 
-                <strong>
-                  {customer.email || '—'}
+                <strong className="customer-value">
+                  {customer.email ||
+                    user.email ||
+                    '—'}
                 </strong>
               </div>
 
-              <div className="customer-detail">
+              <div className="customer-detail-row">
                 <span className="muted">
                   Telefono
                 </span>
 
-                <strong>
+                <strong className="customer-value">
                   {customer.phone || '—'}
                 </strong>
               </div>
 
-              <div className="customer-detail">
+              <div className="customer-detail-row">
                 <span className="muted">
                   Indirizzo di spedizione
                 </span>
 
-                <strong>
+                <strong className="customer-value">
                   {customer.shipping_address ||
                     '—'}
                 </strong>
@@ -366,8 +377,14 @@ export default async function Dashboard() {
                 {(customer.shipping_postal_code ||
                   customer.shipping_city) && (
                   <span>
-                    {customer.shipping_postal_code}{' '}
-                    {customer.shipping_city}
+                    {customer.shipping_postal_code ||
+                      ''}
+                    {customer.shipping_postal_code &&
+                    customer.shipping_city
+                      ? ' '
+                      : ''}
+                    {customer.shipping_city ||
+                      ''}
                   </span>
                 )}
 
@@ -378,12 +395,12 @@ export default async function Dashboard() {
                 )}
               </div>
 
-              <div className="customer-detail">
+              <div className="customer-detail-row">
                 <span className="muted">
                   Cliente dal
                 </span>
 
-                <strong>
+                <strong className="customer-value">
                   {formatDate(
                     customer.created_at
                   )}
