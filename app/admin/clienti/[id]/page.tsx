@@ -66,6 +66,15 @@ export default async function ClienteDetailPage({
     notFound()
   }
 
+  const fullName =
+    `${customer.first_name || ''} ${customer.last_name || ''}`.trim()
+
+  const shippingAddressExists =
+    Boolean(customer.shipping_address) ||
+    Boolean(customer.shipping_city) ||
+    Boolean(customer.shipping_postal_code) ||
+    Boolean(customer.shipping_country)
+
   return (
     <main className="shell">
       <aside className="sidebar">
@@ -125,8 +134,7 @@ export default async function ClienteDetailPage({
             </p>
 
             <h1>
-              {customer.first_name}{' '}
-              {customer.last_name}
+              {fullName || 'Cliente'}
             </h1>
           </div>
 
@@ -138,53 +146,63 @@ export default async function ClienteDetailPage({
           </a>
         </header>
 
-        {/* ANAGRAFICA */}
+        {/* ANAGRAFICA CLIENTE */}
+
         <section className="panel">
           <h2>Anagrafica cliente</h2>
 
-          <div className="grid">
-            <div className="card">
-              <div className="muted">
-                Nome
-              </div>
+          <div className="customer-details">
+
+            <div className="customer-detail-row">
+              <span className="muted">
+                Codice cliente
+              </span>
 
               <strong className="customer-value">
-                {customer.first_name}{' '}
-                {customer.last_name}
+                {customer.id}
               </strong>
             </div>
 
-            <div className="card">
-              <div className="muted">
+            <div className="customer-detail-row">
+              <span className="muted">
+                Nome
+              </span>
+
+              <strong className="customer-value">
+                {fullName || '—'}
+              </strong>
+            </div>
+
+            <div className="customer-detail-row">
+              <span className="muted">
                 Email
-              </div>
+              </span>
 
               <strong className="customer-value">
                 {customer.email || '—'}
               </strong>
             </div>
 
-            <div className="card">
-              <div className="muted">
+            <div className="customer-detail-row">
+              <span className="muted">
                 Telefono
-              </div>
+              </span>
 
               <strong className="customer-value">
                 {customer.phone || '—'}
               </strong>
             </div>
 
-            <div className="card">
-              <div className="muted">
+            <div className="customer-detail-row">
+              <span className="muted">
                 Cliente dal
-              </div>
+              </span>
 
               <strong className="customer-value">
-                {formatDate(
-                  customer.created_at
-                )}
+                {formatDate(customer.created_at)}
               </strong>
             </div>
+
           </div>
 
           {customer.notes && (
@@ -195,20 +213,19 @@ export default async function ClienteDetailPage({
           )}
         </section>
 
-        {/* INDIRIZZO */}
+        {/* INDIRIZZO DI SPEDIZIONE */}
+
         <section className="panel">
           <h2>Indirizzo di spedizione</h2>
 
-          {!customer.shipping_address &&
-          !customer.shipping_city &&
-          !customer.shipping_postal_code &&
-          !customer.shipping_country ? (
+          {!shippingAddressExists ? (
             <div className="empty">
               Nessun indirizzo di spedizione
               registrato.
             </div>
           ) : (
             <div className="shipping-address">
+
               {customer.shipping_address && (
                 <strong>
                   {customer.shipping_address}
@@ -218,8 +235,12 @@ export default async function ClienteDetailPage({
               {(customer.shipping_postal_code ||
                 customer.shipping_city) && (
                 <span>
-                  {customer.shipping_postal_code}{' '}
-                  {customer.shipping_city}
+                  {customer.shipping_postal_code || ''}
+                  {customer.shipping_postal_code &&
+                    customer.shipping_city
+                    ? ' '
+                    : ''}
+                  {customer.shipping_city || ''}
                 </span>
               )}
 
@@ -228,15 +249,18 @@ export default async function ClienteDetailPage({
                   {customer.shipping_country}
                 </span>
               )}
+
             </div>
           )}
         </section>
 
-        {/* GESTIONE */}
+        {/* GESTIONE CLIENTE */}
+
         <section className="panel">
           <h2>Gestione cliente</h2>
 
           <div className="customer-actions">
+
             <a
               href={`/admin/articoli?customer=${customer.id}`}
               className="customer-action"
@@ -288,8 +312,10 @@ export default async function ClienteDetailPage({
                 Visualizza i movimenti →
               </span>
             </a>
+
           </div>
         </section>
+
       </section>
     </main>
   )
