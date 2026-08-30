@@ -7,8 +7,7 @@ const money = (n: number) =>
     currency: 'EUR',
   }).format(n || 0)
 
-const percent = (n: number) =>
-  `${n.toFixed(1)}%`
+const percent = (n: number) => `${n.toFixed(1)}%`
 
 const menu = [
   ['Dashboard', '/admin'],
@@ -114,7 +113,7 @@ export default async function AdminDashboard() {
       .order('movement_at', {
         ascending: false,
       })
-      .limit(8),
+      .limit(5),
 
     supabase
       .from('article_assignments')
@@ -132,8 +131,7 @@ export default async function AdminDashboard() {
 
   const articles = articlesResult.data || []
   const sales = salesResult.data || []
-  const assignments =
-    assignmentsResult.data || []
+  const assignments = assignmentsResult.data || []
 
   const articleMap = new Map(
     articles.map((article) => [
@@ -149,9 +147,6 @@ export default async function AdminDashboard() {
     EUROPA: emptyStats(),
   }
 
-  /*
-   * 1. Calcolo quantità acquistate
-   */
   for (const article of articles) {
     const purchased = Number(
       article.quantity_purchased || 0
@@ -159,27 +154,19 @@ export default async function AdminDashboard() {
 
     markets.TOTALE.purchased += purchased
 
-    const origin =
-      (article.origin || '')
-        .trim()
-        .toUpperCase()
+    const origin = (article.origin || '')
+      .trim()
+      .toUpperCase()
 
     if (origin.includes('GIAPPONE')) {
       markets.GIAPPONE.purchased += purchased
-    } else if (
-      origin.includes('VIETNAM')
-    ) {
+    } else if (origin.includes('VIETNAM')) {
       markets.VIETNAM.purchased += purchased
-    } else if (
-      origin.includes('EUROPA')
-    ) {
+    } else if (origin.includes('EUROPA')) {
       markets.EUROPA.purchased += purchased
     }
   }
 
-  /*
-   * 2. Calcolo vendite, ricavi e costo del venduto
-   */
   for (const sale of sales) {
     const quantity = Number(
       sale.quantity || 0
@@ -197,160 +184,120 @@ export default async function AdminDashboard() {
       article?.unit_cost_eur || 0
     )
 
-    const costOfSold =
-      quantity * unitCost
+    const costOfSold = quantity * unitCost
 
     markets.TOTALE.sold += quantity
     markets.TOTALE.revenue += revenue
-    markets.TOTALE.costOfSold +=
-      costOfSold
+    markets.TOTALE.costOfSold += costOfSold
 
-    if (article) {
-      const origin =
-        (article.origin || '')
-          .trim()
-          .toUpperCase()
+    if (!article) continue
 
-      if (origin.includes('GIAPPONE')) {
-        markets.GIAPPONE.sold +=
-          quantity
-        markets.GIAPPONE.revenue +=
-          revenue
-        markets.GIAPPONE.costOfSold +=
-          costOfSold
-      } else if (
-        origin.includes('VIETNAM')
-      ) {
-        markets.VIETNAM.sold +=
-          quantity
-        markets.VIETNAM.revenue +=
-          revenue
-        markets.VIETNAM.costOfSold +=
-          costOfSold
-      } else if (
-        origin.includes('EUROPA')
-      ) {
-        markets.EUROPA.sold +=
-          quantity
-        markets.EUROPA.revenue +=
-          revenue
-        markets.EUROPA.costOfSold +=
-          costOfSold
-      }
+    const origin = (article.origin || '')
+      .trim()
+      .toUpperCase()
+
+    if (origin.includes('GIAPPONE')) {
+      markets.GIAPPONE.sold += quantity
+      markets.GIAPPONE.revenue += revenue
+      markets.GIAPPONE.costOfSold += costOfSold
+    } else if (origin.includes('VIETNAM')) {
+      markets.VIETNAM.sold += quantity
+      markets.VIETNAM.revenue += revenue
+      markets.VIETNAM.costOfSold += costOfSold
+    } else if (origin.includes('EUROPA')) {
+      markets.EUROPA.sold += quantity
+      markets.EUROPA.revenue += revenue
+      markets.EUROPA.costOfSold += costOfSold
     }
   }
 
-  /*
-   * 3. Disponibilità e margini
-   */
-  for (const market of Object.values(
-    markets
-  )) {
-    market.available =
-      Math.max(
-        0,
-        market.purchased -
-          market.sold
-      )
+  for (const market of Object.values(markets)) {
+    market.available = Math.max(
+      0,
+      market.purchased - market.sold
+    )
 
     market.margin =
-      market.revenue -
-      market.costOfSold
+      market.revenue - market.costOfSold
 
     market.marginPercent =
       market.revenue > 0
-        ? (market.margin /
-            market.revenue) *
-          100
+        ? (market.margin / market.revenue) * 100
         : 0
   }
 
-  /*
-   * 4. Articoli assegnati
-   */
   let assignedUnits = 0
 
   for (const assignment of assignments) {
-    if (
-      assignment.status !== 'ATTIVA'
-    ) {
-      continue
-    }
+    if (assignment.status !== 'ATTIVA') continue
 
-    const quantity = Number(
+    assignedUnits += Number(
       assignment.quantity_assigned || 0
     )
-
-    assignedUnits += quantity
   }
 
   const unassignedUnits = Math.max(
     0,
-    markets.TOTALE.purchased -
-      assignedUnits
+    markets.TOTALE.purchased - assignedUnits
   )
 
-  /*
-   * 5. Totale pagamenti
-   */
-  const payments =
-    paymentsResult.data || []
+  const payments = paymentsResult.data || []
 
-  const paymentsTotal =
-    payments.reduce(
-      (sum, payment) =>
-        sum +
-        Number(
-          payment.amount_eur ??
-            payment.amount ??
-            0
-        ),
-      0
-    )
+  const paymentsTotal = payments.reduce(
+    (sum, payment) =>
+      sum +
+      Number(
+        payment.amount_eur ??
+          payment.amount ??
+          0
+      ),
+    0
+  )
 
-  /*
-   * 6. Crediti
-   */
-  const credits =
-    creditsResult.data || []
+  const credits = creditsResult.data || []
 
-  const creditsTotal =
-    credits.reduce(
-      (sum, credit) =>
-        sum +
-        Number(
-          credit.amount_eur || 0
-        ),
-      0
-    )
+  const creditsTotal = credits.reduce(
+    (sum, credit) =>
+      sum + Number(credit.amount_eur || 0),
+    0
+  )
 
-  const creditsUsed =
-    credits.reduce(
-      (sum, credit) =>
-        sum +
-        Number(
-          credit.used_amount_eur ||
-            0
-        ),
-      0
-    )
+  const creditsUsed = credits.reduce(
+    (sum, credit) =>
+      sum +
+      Number(
+        credit.used_amount_eur || 0
+      ),
+    0
+  )
 
-  const creditsRemaining =
-    Math.max(
-      0,
-      creditsTotal -
-        creditsUsed
-    )
+  const creditsRemaining = Math.max(
+    0,
+    creditsTotal - creditsUsed
+  )
 
-  const movements =
-    movementsResult.data || []
+  const movements = movementsResult.data || []
+
+  const formatDate = (value: string) =>
+    new Intl.DateTimeFormat('it-IT', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    }).format(new Date(value))
+
+  const marketRows = [
+    ['🇯🇵 Giappone', markets.GIAPPONE],
+    ['🇻🇳 Vietnam', markets.VIETNAM],
+    ['🇪🇺 Europa', markets.EUROPA],
+  ] as const
 
   return (
     <main className="shell">
       <aside className="sidebar">
         <div className="brand">
-          MangaBEART{' '}
-          <span>[ShopaTüT]</span>
+          MangaBEART <span>[ShopaTüT]</span>
         </div>
 
         <nav>
@@ -383,7 +330,6 @@ export default async function AdminDashboard() {
             <p className="eyebrow">
               AMMINISTRAZIONE
             </p>
-
             <h1>Dashboard</h1>
           </div>
 
@@ -395,27 +341,152 @@ export default async function AdminDashboard() {
           </a>
         </header>
 
+        {/* RIEPILOGO AMMINISTRATIVO */}
         <section className="panel">
-          <h2>
-            Monitoraggio complessivo
-          </h2>
+          <h2>Riepilogo amministrativo</h2>
 
           <div className="grid">
             <div className="card">
-              <div className="muted">
-                Articoli acquistati
-              </div>
+              <div className="muted">Clienti</div>
               <strong>
-                {markets.TOTALE.purchased}
+                {customersResult.count || 0}
               </strong>
               <small>
-                unità totali
+                clienti registrati
+              </small>
+            </div>
+
+            <div className="card">
+              <div className="muted">Caselle</div>
+              <strong>
+                {mailboxesResult.count || 0}
+              </strong>
+              <small>
+                caselle registrate
+              </small>
+            </div>
+
+            <div className="card">
+              <div className="muted">Pagamenti</div>
+              <strong>
+                {money(paymentsTotal)}
+              </strong>
+              <small>
+                pagamenti registrati
               </small>
             </div>
 
             <div className="card">
               <div className="muted">
-                Articoli venduti
+                Crediti residui
+              </div>
+              <strong>
+                {money(creditsRemaining)}
+              </strong>
+              <small>
+                credito disponibile
+              </small>
+            </div>
+
+            <div className="card">
+              <div className="muted">
+                Spedizioni
+              </div>
+              <strong>
+                {shipmentsResult.count || 0}
+              </strong>
+              <small>
+                spedizioni registrate
+              </small>
+            </div>
+          </div>
+        </section>
+
+        {/* ULTIMI MOVIMENTI */}
+        <section className="panel">
+          <div
+            style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              gap: '1rem',
+              flexWrap: 'wrap',
+            }}
+          >
+            <h2>Ultimi movimenti</h2>
+
+            <a
+              href="/admin/movimenti"
+              className="back-button"
+            >
+              Vedi tutti i movimenti →
+            </a>
+          </div>
+
+          {movements.length === 0 ? (
+            <div className="empty">
+              Nessun movimento registrato.
+            </div>
+          ) : (
+            <div className="movement-list">
+              {movements.map((movement) => (
+                <div
+                  className="movement"
+                  key={movement.id}
+                >
+                  <div>
+                    <b>
+                      {movement.movement_code}
+                    </b>
+
+                    <span>
+                      {movement.description ||
+                        movement.movement_type}
+                    </span>
+
+                    <span>
+                      {formatDate(
+                        movement.movement_at
+                      )}
+                    </span>
+                  </div>
+
+                  <strong>
+                    {movement.total_amount_eur ==
+                    null
+                      ? '—'
+                      : money(
+                          Number(
+                            movement.total_amount_eur
+                          )
+                        )}
+                  </strong>
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
+
+        {/* MONITORAGGIO COMPLESSIVO */}
+        <section className="panel">
+          <h2>Monitoraggio complessivo</h2>
+
+          <div className="grid">
+            <div className="card">
+              <div className="muted">
+                Acquistati
+              </div>
+              <strong>
+                {markets.TOTALE.purchased}
+              </strong>
+              <small>
+                unità acquistate
+              </small>
+            </div>
+
+            <div className="card">
+              <div className="muted">
+                Venduti
               </div>
               <strong>
                 {markets.TOTALE.sold}
@@ -447,7 +518,7 @@ export default async function AdminDashboard() {
                 )}
               </strong>
               <small>
-                vendite articoli
+                ricavi da vendite
               </small>
             </div>
 
@@ -520,239 +591,111 @@ export default async function AdminDashboard() {
           </div>
         </section>
 
+        {/* ANALISI PER PROVENIENZA */}
         <section className="panel">
-          <h2>
-            Analisi per provenienza
-          </h2>
+          <h2>Analisi per provenienza</h2>
 
-          <div className="grid">
-            {[
-              [
-                '🇯🇵 Giappone',
-                markets.GIAPPONE,
-              ],
-              [
-                '🇻🇳 Vietnam',
-                markets.VIETNAM,
-              ],
-              [
-                '🇪🇺 Europa',
-                markets.EUROPA,
-              ],
-            ].map(
-              ([label, stats]) => {
-                const market =
-                  stats as MarketStats
-
-                return (
+          <div
+            style={{
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '1rem',
+            }}
+          >
+            {marketRows.map(
+              ([label, market]) => (
+                <div
+                  key={label}
+                  className="card"
+                >
                   <div
-                    className="card"
-                    key={label as string}
+                    style={{
+                      display: 'grid',
+                      gridTemplateColumns:
+                        'minmax(130px, 1.2fr) repeat(7, minmax(90px, 1fr))',
+                      gap: '1rem',
+                      alignItems: 'center',
+                    }}
                   >
-                    <div className="muted">
-                      {label as string}
-                    </div>
-
-                    <small>
-                      Acquistati:{' '}
-                      {market.purchased}
-                    </small>
-
-                    <small>
-                      Venduti:{' '}
-                      {market.sold}
-                    </small>
-
-                    <small>
-                      Disponibili:{' '}
-                      {market.available}
-                    </small>
-
-                    <small>
-                      Ricavi:{' '}
-                      {money(
-                        market.revenue
-                      )}
-                    </small>
-
-                    <small>
-                      Costo venduto:{' '}
-                      {money(
-                        market.costOfSold
-                      )}
-                    </small>
-
                     <strong>
-                      {money(
-                        market.margin
-                      )}
+                      {label}
                     </strong>
 
-                    <small>
-                      Margine:{' '}
-                      {percent(
-                        market.marginPercent
-                      )}
-                    </small>
+                    <div>
+                      <small>
+                        Acquistati
+                      </small>
+                      <strong>
+                        {market.purchased}
+                      </strong>
+                    </div>
+
+                    <div>
+                      <small>
+                        Venduti
+                      </small>
+                      <strong>
+                        {market.sold}
+                      </strong>
+                    </div>
+
+                    <div>
+                      <small>
+                        Disponibili
+                      </small>
+                      <strong>
+                        {market.available}
+                      </strong>
+                    </div>
+
+                    <div>
+                      <small>
+                        Ricavi
+                      </small>
+                      <strong>
+                        {money(
+                          market.revenue
+                        )}
+                      </strong>
+                    </div>
+
+                    <div>
+                      <small>
+                        Costo venduto
+                      </small>
+                      <strong>
+                        {money(
+                          market.costOfSold
+                        )}
+                      </strong>
+                    </div>
+
+                    <div>
+                      <small>
+                        Margine
+                      </small>
+                      <strong>
+                        {money(
+                          market.margin
+                        )}
+                      </strong>
+                    </div>
+
+                    <div>
+                      <small>
+                        Margine %
+                      </small>
+                      <strong>
+                        {percent(
+                          market.marginPercent
+                        )}
+                      </strong>
+                    </div>
                   </div>
-                )
-              }
+                </div>
+              )
             )}
           </div>
-        </section>
-
-        <section className="panel">
-          <h2>
-            Riepilogo amministrativo
-          </h2>
-
-          <div className="grid">
-            <div className="card">
-              <div className="muted">
-                Clienti
-              </div>
-              <strong>
-                {customersResult.count ||
-                  0}
-              </strong>
-              <small>
-                clienti registrati
-              </small>
-            </div>
-
-            <div className="card">
-              <div className="muted">
-                Caselle
-              </div>
-              <strong>
-                {mailboxesResult.count ||
-                  0}
-              </strong>
-              <small>
-                caselle registrate
-              </small>
-            </div>
-
-            <div className="card">
-              <div className="muted">
-                Pagamenti
-              </div>
-              <strong>
-                {money(
-                  paymentsTotal
-                )}
-              </strong>
-              <small>
-                pagamenti registrati
-              </small>
-            </div>
-
-            <div className="card">
-              <div className="muted">
-                Crediti residui
-              </div>
-              <strong>
-                {money(
-                  creditsRemaining
-                )}
-              </strong>
-              <small>
-                credito disponibile
-              </small>
-            </div>
-
-            <div className="card">
-              <div className="muted">
-                Spedizioni
-              </div>
-              <strong>
-                {shipmentsResult.count ||
-                  0}
-              </strong>
-              <small>
-                spedizioni registrate
-              </small>
-            </div>
-
-            <div className="card">
-              <div className="muted">
-                Movimenti recenti
-              </div>
-              <strong>
-                {movements.length}
-              </strong>
-              <small>
-                ultimi movimenti
-              </small>
-            </div>
-          </div>
-        </section>
-
-        <section className="panel">
-          <h2>
-            Ultimi movimenti
-          </h2>
-
-          {movements.length === 0 ? (
-            <div className="empty">
-              Nessun movimento
-              registrato.
-            </div>
-          ) : (
-            <div className="movement-list">
-              {movements.map(
-                (movement) => (
-                  <div
-                    className="movement"
-                    key={movement.id}
-                  >
-                    <div>
-                      <b>
-                        {
-                          movement.movement_code
-                        }
-                      </b>
-
-                      <span>
-                        {
-                          movement.description ||
-                          movement.movement_type
-                        }
-                      </span>
-
-                      <span>
-                        {new Intl.DateTimeFormat(
-                          'it-IT',
-                          {
-                            day: '2-digit',
-                            month: '2-digit',
-                            year: 'numeric',
-                            hour: '2-digit',
-                            minute: '2-digit',
-                          }
-                        ).format(
-                          new Date(
-                            movement.movement_at
-                          )
-                        )}
-                      </span>
-                    </div>
-
-                    <strong>
-                      {movement.total_amount_eur ==
-                      null
-                        ? '—'
-                        : money(
-                            Number(
-                              movement.total_amount_eur
-                            )
-                          )}
-                    </strong>
-                  </div>
-                )
-              )}
-            </div>
-          )}
         </section>
       </section>
     </main>
