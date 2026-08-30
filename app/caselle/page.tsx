@@ -26,6 +26,10 @@ export default async function CasellePage() {
               <p className="eyebrow">AREA CLIENTE</p>
               <h1>Caselle</h1>
             </div>
+
+            <a href="/dashboard" className="back-button">
+              ← Dashboard
+            </a>
           </header>
 
           <section className="panel">
@@ -56,6 +60,10 @@ export default async function CasellePage() {
             <p className="eyebrow">AREA CLIENTE</p>
             <h1>Caselle</h1>
           </div>
+
+          <a href="/dashboard" className="back-button">
+            ← Dashboard
+          </a>
         </header>
 
         <div className="grid">
