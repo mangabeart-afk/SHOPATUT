@@ -32,10 +32,15 @@ export default async function CreditiPage() {
               <p className="eyebrow">AREA CLIENTE</p>
               <h1>Crediti</h1>
             </div>
+
+            <a href="/dashboard" className="back-button">
+              ← Dashboard
+            </a>
           </header>
 
           <section className="panel">
             <h2>I miei crediti</h2>
+
             <div className="empty">
               Impossibile caricare i crediti.
             </div>
@@ -67,6 +72,10 @@ export default async function CreditiPage() {
             <p className="eyebrow">AREA CLIENTE</p>
             <h1>Crediti</h1>
           </div>
+
+          <a href="/dashboard" className="back-button">
+            ← Dashboard
+          </a>
         </header>
 
         <div className="grid">
@@ -100,13 +109,22 @@ export default async function CreditiPage() {
             <div className="movement-list">
               {rows.map((credit) => {
                 const amount = Number(credit.amount_eur || 0)
-                const usedAmount = Number(credit.used_amount_eur || 0)
-                const residual = Math.max(0, amount - usedAmount)
+                const usedAmount = Number(
+                  credit.used_amount_eur || 0
+                )
+                const residual = Math.max(
+                  0,
+                  amount - usedAmount
+                )
 
                 return (
-                  <div className="movement" key={credit.id}>
+                  <div
+                    className="movement"
+                    key={credit.id}
+                  >
                     <div>
                       <b>Credito #{credit.id}</b>
+
                       <span>
                         Utilizzato: {money(usedAmount)}
                       </span>
@@ -116,6 +134,7 @@ export default async function CreditiPage() {
                       <span>
                         Totale: {money(amount)}
                       </span>
+
                       <strong>
                         Residuo: {money(residual)}
                       </strong>
