@@ -31,6 +31,16 @@ type MarketStats = {
   marginPercent: number
 }
 
+type CustomerDashboardRow = {
+  customerId: string
+  customerCode: string
+  mailboxId: string | null
+  mailboxCode: string | null
+  debtRemaining: number
+  hasPendingArticles: boolean
+  allArticlesInStock: boolean
+}
+
 const emptyStats = (): MarketStats => ({
   purchased: 0,
   sold: 0,
@@ -64,7 +74,9 @@ export default async function AdminDashboard() {
 
   const [
     customersResult,
+    customersDataResult,
     mailboxesResult,
+    mailboxesDataResult,
     articlesResult,
     paymentsResult,
     creditsResult,
@@ -78,22 +90,30 @@ export default async function AdminDashboard() {
       .select('id', { count: 'exact', head: true }),
 
     supabase
+      .from('customers')
+      .select('id,customer_code,first_name,last_name'),
+
+    supabase
       .from('mailboxes')
       .select('id', { count: 'exact', head: true }),
 
     supabase
+      .from('mailboxes')
+      .select('id,mailbox_code,customer_id,status'),
+
+    supabase
       .from('articles')
       .select(
-        'id,origin,quantity_purchased,unit_cost_eur,total_cost_eur'
+        'id,origin,status,quantity_purchased,unit_cost_eur,total_cost_eur'
       ),
 
     supabase
       .from('payments')
-      .select('amount_eur,amount'),
+      .select('mailbox_id,amount_eur,amount'),
 
     supabase
       .from('credits')
-      .select('amount_eur,used_amount_eur'),
+      .select('mailbox_id,amount_eur,used_amount_eur'),
 
     supabase
       .from('shipments')
@@ -119,13 +139,13 @@ export default async function AdminDashboard() {
     supabase
       .from('article_assignments')
       .select(
-        'article_id,quantity_assigned,status'
+        'article_id,mailbox_id,quantity_assigned,status'
       ),
 
     supabase
       .from('movements')
       .select(
-        'article_id,quantity,total_amount_eur'
+        'mailbox_id,article_id,quantity,total_amount_eur'
       )
       .eq('movement_type', 'VENDITA'),
   ])
@@ -287,6 +307,94 @@ export default async function AdminDashboard() {
       hour: '2-digit',
       minute: '2-digit',
     }).format(new Date(value))
+
+  const customers = customersDataResult.data || []
+  const customerById = new Map(customers.map((customer: any) => [customer.id, customer]))
+
+  const mailboxRows = (mailboxesDataResult.data || []) as any[]
+  const salesByMailbox = new Map<string, number>()
+  for (const sale of sales as any[]) {
+    const mailboxId = sale.mailbox_id as string | null
+    if (!mailboxId) continue
+    salesByMailbox.set(
+      mailboxId,
+      (salesByMailbox.get(mailboxId) || 0) + Number(sale.total_amount_eur || 0)
+    )
+  }
+
+  const paymentsByMailbox = new Map<string, number>()
+  for (const payment of payments as any[]) {
+    if (!payment.mailbox_id) continue
+    paymentsByMailbox.set(
+      payment.mailbox_id,
+      (paymentsByMailbox.get(payment.mailbox_id) || 0) + Number(payment.amount_eur ?? payment.amount ?? 0)
+    )
+  }
+
+  const creditsByMailbox = new Map<string, number>()
+  for (const credit of credits as any[]) {
+    if (!credit.mailbox_id) continue
+    const remaining = Math.max(
+      0,
+      Number(credit.amount_eur || 0) - Number(credit.used_amount_eur || 0)
+    )
+    creditsByMailbox.set(
+      credit.mailbox_id,
+      (creditsByMailbox.get(credit.mailbox_id) || 0) + remaining
+    )
+  }
+
+  const assignmentsByMailbox = new Map<string, any[]>()
+  for (const assignment of assignments as any[]) {
+    if (assignment.status !== 'ATTIVA' || !assignment.mailbox_id) continue
+    const list = assignmentsByMailbox.get(assignment.mailbox_id) || []
+    list.push(assignment)
+    assignmentsByMailbox.set(assignment.mailbox_id, list)
+  }
+
+  const customerDashboardRows: CustomerDashboardRow[] = []
+  for (const mailbox of mailboxRows) {
+    const customer = customerById.get(mailbox.customer_id) as any
+    if (!customer) continue
+
+    const mailboxAssignments = assignmentsByMailbox.get(mailbox.id) || []
+    const articleRows = mailboxAssignments
+      .map((assignment) => articleMap.get(assignment.article_id))
+      .filter(Boolean) as any[]
+
+    const hasPendingArticles = articleRows.some(
+      (article) => article.status === 'IN_ARRIVO' || article.status === 'IN_STOCK'
+    )
+
+    const allArticlesInStock =
+      articleRows.length > 0 &&
+      articleRows.every((article) => article.status === 'IN_STOCK')
+
+    const debtRemaining = Math.max(
+      0,
+      (salesByMailbox.get(mailbox.id) || 0) -
+        (paymentsByMailbox.get(mailbox.id) || 0) -
+        (creditsByMailbox.get(mailbox.id) || 0)
+    )
+
+    customerDashboardRows.push({
+      customerId: customer.id,
+      customerCode: customer.customer_code || '—',
+      mailboxId: mailbox.id,
+      mailboxCode: mailbox.mailbox_code || null,
+      debtRemaining,
+      hasPendingArticles,
+      allArticlesInStock,
+    })
+  }
+
+  const customersWithZeroBalanceAndPending = customerDashboardRows
+    .filter((row) => row.debtRemaining === 0 && row.hasPendingArticles)
+    .sort((a, b) => a.customerCode.localeCompare(b.customerCode))
+
+  const customersReadyToShip = customerDashboardRows
+    .filter((row) => row.allArticlesInStock)
+    .sort((a, b) => a.customerCode.localeCompare(b.customerCode))
 
   const marketRows = [
     ['🇯🇵 Giappone', markets.GIAPPONE],
@@ -577,6 +685,50 @@ export default async function AdminDashboard() {
               </div>
             ))}
           </div>
+        </section>
+
+        {/* CLIENTI CON SALDO €0 E ARTICOLI PENDENTI */}
+        <section className="panel">
+          <h2>Clienti con saldo da pagare €0 e articoli in arrivo / stock</h2>
+          {customersWithZeroBalanceAndPending.length === 0 ? (
+            <div className="empty">Nessun cliente corrispondente.</div>
+          ) : (
+            <div className="admin-analysis-list">
+              {customersWithZeroBalanceAndPending.map((row) => (
+                <div className="admin-analysis-row" key={row.customerId}>
+                  <div className="admin-analysis-title">{row.customerCode}</div>
+                  <div className="admin-analysis-grid">
+                    <div><span>Debito rimanente</span><strong>{money(row.debtRemaining)}</strong></div>
+                    <div><span>Articoli</span><strong>IN ARRIVO / STOCK</strong></div>
+                    <div><span>Casella</span><strong>{row.mailboxCode || '—'}</strong></div>
+                    <div><span>Gestione</span><strong><a className="dashboard-action-link" href={row.mailboxId ? `/admin/caselle?search=${encodeURIComponent(row.mailboxCode || '')}` : '/admin/caselle'}>Vai alla casella →</a></strong></div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
+
+        {/* CLIENTI PRONTI PER LA SPEDIZIONE */}
+        <section className="panel">
+          <h2>Clienti con tutti gli articoli in stock — pronti per essere spediti</h2>
+          {customersReadyToShip.length === 0 ? (
+            <div className="empty">Nessun cliente pronto per la spedizione.</div>
+          ) : (
+            <div className="admin-analysis-list">
+              {customersReadyToShip.map((row) => (
+                <div className="admin-analysis-row" key={row.customerId}>
+                  <div className="admin-analysis-title">{row.customerCode}</div>
+                  <div className="admin-analysis-grid">
+                    <div><span>Stato articoli</span><strong>TUTTI IN STOCK</strong></div>
+                    <div><span>Debito rimanente</span><strong>{money(row.debtRemaining)}</strong></div>
+                    <div><span>Casella</span><strong>{row.mailboxCode || '—'}</strong></div>
+                    <div><span>Gestione</span><strong><a className="dashboard-action-link" href={row.mailboxId ? `/admin/caselle?search=${encodeURIComponent(row.mailboxCode || '')}` : '/admin/caselle'}>Vai alla casella →</a></strong></div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </section>
       </section>
     </main>
