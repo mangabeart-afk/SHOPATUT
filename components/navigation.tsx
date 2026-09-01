@@ -56,7 +56,7 @@ export default function Navigation({
         {displayName || email || 'Utente'}
       </div>
 
-      {role === 'CLIENTE' && <SignOutButton />}
+      <SignOutButton />
     </aside>
   )
 }

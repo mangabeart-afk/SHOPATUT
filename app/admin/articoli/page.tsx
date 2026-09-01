@@ -480,26 +480,33 @@ export default async function ArticoliAdminPage({
       )
   }
 
-  const [
-    articlesResult,
-    salesResult,
-  ] = await Promise.all([
-    articlesQuery,
+  let articlesResult = await articlesQuery
 
-    supabase
-      .from('movements')
-      .select(
-        `
-          article_id,
-          quantity,
-          total_amount_eur
-        `
-      )
-      .eq(
-        'movement_type',
-        'VENDITA'
-      ),
-  ])
+  // Compatibilità con database in cui le colonne aggiunte più recentemente
+  // non siano ancora state pubblicate. In quel caso mostriamo comunque gli
+  // articoli usando lo schema base e impostiamo i nuovi campi ai valori di default.
+  if (articlesResult.error) {
+    const fallback = await supabase
+      .from('articles')
+      .select(`
+        id, article_code, purchase_date, origin, seller, series, detail,
+        quantity_purchased, currency, unit_price_foreign, exchange_rate,
+        accessory_cost_eur, total_cost_eur, unit_cost_eur, notes
+      `)
+      .order('purchase_date', { ascending: false })
+
+    if (!fallback.error) {
+      articlesResult = {
+        data: (fallback.data || []).map((article: any) => ({ ...article, photo_url: null, status: 'IN_STOCK' })),
+        error: null,
+      } as typeof articlesResult
+    }
+  }
+
+  const { data: salesData } = await supabase
+    .from('movements')
+    .select('article_id,quantity,total_amount_eur')
+    .eq('movement_type', 'VENDITA')
 
   /*
    * ============================
@@ -511,38 +518,16 @@ export default async function ArticoliAdminPage({
     return (
       <main className="shell">
         <Navigation role="AMMINISTRATORE" active="/admin/articoli" displayName={profile?.display_name} email={user.email} />
-
         <section className="content">
-          <header className="topbar">
-            <div>
-              <p className="eyebrow">
-                AMMINISTRAZIONE
-              </p>
-
-              <h1>Articoli</h1>
-            </div>
-          </header>
-
-          <section className="panel">
-            <h2>Articoli</h2>
-
-            <div className="empty">
-              Impossibile caricare gli
-              articoli.
-            </div>
-          </section>
+          <header className="topbar"><div><p className="eyebrow">AMMINISTRAZIONE</p><h1>Articoli</h1></div></header>
+          <section className="panel"><h2>Articoli</h2><div className="error">Impossibile caricare gli articoli: {articlesResult.error.message}</div></section>
         </section>
       </main>
     )
   }
 
-  const articles =
-    (articlesResult.data ||
-      []) as Article[]
-
-  const sales =
-    (salesResult.data ||
-      []) as Sale[]
+  const articles = (articlesResult.data || []) as Article[]
+  const sales = (salesData || []) as Sale[]
 
   /*
    * ============================

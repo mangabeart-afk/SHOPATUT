@@ -561,107 +561,21 @@ export default async function AdminDashboard() {
         {/* ANALISI PER PROVENIENZA */}
         <section className="panel">
           <h2>Analisi per provenienza</h2>
-
-          <div
-            style={{
-              display: 'flex',
-              flexDirection: 'column',
-              gap: '1rem',
-            }}
-          >
-            {marketRows.map(
-              ([label, market]) => (
-                <div
-                  key={label}
-                  className="card"
-                >
-                  <div
-                    style={{
-                      display: 'grid',
-                      gridTemplateColumns:
-                        'minmax(130px, 1.2fr) repeat(7, minmax(90px, 1fr))',
-                      gap: '1rem',
-                      alignItems: 'center',
-                    }}
-                  >
-                    <strong>
-                      {label}
-                    </strong>
-
-                    <div>
-                      <small>
-                        Acquistati
-                      </small>
-                      <strong>
-                        {market.purchased}
-                      </strong>
-                    </div>
-
-                    <div>
-                      <small>
-                        Venduti
-                      </small>
-                      <strong>
-                        {market.sold}
-                      </strong>
-                    </div>
-
-                    <div>
-                      <small>
-                        Disponibili
-                      </small>
-                      <strong>
-                        {market.available}
-                      </strong>
-                    </div>
-
-                    <div>
-                      <small>
-                        Ricavi
-                      </small>
-                      <strong>
-                        {money(
-                          market.revenue
-                        )}
-                      </strong>
-                    </div>
-
-                    <div>
-                      <small>
-                        Costo venduto
-                      </small>
-                      <strong>
-                        {money(
-                          market.costOfSold
-                        )}
-                      </strong>
-                    </div>
-
-                    <div>
-                      <small>
-                        Margine
-                      </small>
-                      <strong>
-                        {money(
-                          market.margin
-                        )}
-                      </strong>
-                    </div>
-
-                    <div>
-                      <small>
-                        Margine %
-                      </small>
-                      <strong>
-                        {percent(
-                          market.marginPercent
-                        )}
-                      </strong>
-                    </div>
-                  </div>
+          <div className="origin-analysis">
+            {marketRows.map(([label, market]) => (
+              <div className="origin-analysis-card" key={label}>
+                <div className="origin-analysis-title">{label}</div>
+                <div className="origin-analysis-grid">
+                  <div><span>Acquistati</span><strong>{market.purchased}</strong></div>
+                  <div><span>Venduti</span><strong>{market.sold}</strong></div>
+                  <div><span>Disponibili</span><strong>{market.available}</strong></div>
+                  <div><span>Ricavi</span><strong>{money(market.revenue)}</strong></div>
+                  <div><span>Costo venduto</span><strong>{money(market.costOfSold)}</strong></div>
+                  <div><span>Margine</span><strong>{money(market.margin)}</strong></div>
+                  <div><span>Margine %</span><strong>{percent(market.marginPercent)}</strong></div>
                 </div>
-              )
-            )}
+              </div>
+            ))}
           </div>
         </section>
       </section>
