@@ -2,6 +2,8 @@ import { redirect } from 'next/navigation'
 import { createClient } from '../../../lib/supabase-server'
 import Navigation from '../../../components/navigation'
 import SelectAll from '../../../components/select-all'
+import ArticleForm from '../../../components/article-form'
+import { createArticle } from './actions'
 
 type ArticoliAdminPageProps = {
   searchParams: Promise<{
@@ -37,6 +39,7 @@ type Article = {
   unit_cost_eur: number | null
   notes: string | null
   photo_url: string | null
+  seller_page_url: string | null
   status: ArticleStatus
 }
 
@@ -133,58 +136,6 @@ const statusClass = (
     default:
       return 'article-status'
   }
-}
-
-/*
- * ============================
- * NUOVO ARTICOLO
- * ============================
- */
-
-async function createArticle(formData: FormData) {
-  'use server'
-
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) redirect('/login')
-
-  const { data: profile } = await supabase.from('profiles').select('role').eq('user_id', user.id).maybeSingle()
-  if (profile?.role !== 'AMMINISTRATORE') redirect('/dashboard')
-
-  const quantity = Number(formData.get('quantity_purchased') || 0)
-  const unitPrice = Number(formData.get('unit_price_foreign') || 0)
-  const exchangeRate = Number(formData.get('exchange_rate') || 1)
-  const accessoryCost = Number(formData.get('accessory_cost_eur') || 0)
-  const status = String(formData.get('status') || 'IN_ARRIVO')
-
-  if (quantity <= 0 || unitPrice < 0 || exchangeRate <= 0 || accessoryCost < 0) {
-    redirect('/admin/articoli?error=Valori numerici non validi.')
-  }
-
-  if (!['IN_ARRIVO','IN_STOCK','VENDUTO'].includes(status)) {
-    redirect('/admin/articoli?error=Stato articolo non valido.')
-  }
-
-  const { error } = await supabase.from('articles').insert({
-    purchase_date: String(formData.get('purchase_date') || new Date().toISOString().slice(0,10)),
-    origin: String(formData.get('origin') || 'GIAPPONE'),
-    seller: String(formData.get('seller') || '').trim() || null,
-    series: String(formData.get('series') || '').trim() || null,
-    detail: String(formData.get('detail') || '').trim() || null,
-    quantity_purchased: quantity,
-    currency: String(formData.get('currency') || 'EUR').trim().toUpperCase(),
-    unit_price_foreign: unitPrice,
-    exchange_rate: exchangeRate,
-    accessory_cost_eur: accessoryCost,
-    photo_url: await resolveArticlePhotoUrl(
-      String(formData.get('photo_url') || '')
-    ),
-    notes: String(formData.get('notes') || '').trim() || null,
-    status,
-  })
-
-  if (error) redirect(`/admin/articoli?error=${encodeURIComponent(error.message)}`)
-  redirect('/admin/articoli?message=Articolo registrato correttamente.')
 }
 
 /*
@@ -428,6 +379,7 @@ export default async function ArticoliAdminPage({
         unit_cost_eur,
         notes,
         photo_url,
+        seller_page_url,
         status
       `
     )
@@ -497,13 +449,9 @@ export default async function ArticoliAdminPage({
 
     if (!fallback.error) {
       articlesResult = {
-  data: (fallback.data || []).map((article: any) => ({
-    ...article,
-    photo_url: null,
-    status: 'IN_STOCK',
-  })),
-  error: null,
-} as unknown as typeof articlesResult
+        data: (fallback.data || []).map((article: any) => ({ ...article, photo_url: null, status: 'IN_STOCK' })),
+        error: null,
+      } as unknown as typeof articlesResult
     }
   }
 
@@ -852,27 +800,9 @@ export default async function ArticoliAdminPage({
         {/* NUOVO ARTICOLO */}
 
         <section className="panel">
-          <h2>Carica nuovo articolo</h2>
-          <p className="muted">Registra un articolo direttamente dalla sezione Articoli. Il codice articolo viene generato automaticamente.</p>
-
-          <form action={createArticle} className="article-create-form">
-            <div className="form-grid">
-              <label>Data acquisto<input type="date" name="purchase_date" defaultValue={new Date().toISOString().slice(0, 10)} required /></label>
-              <label>Provenienza<select name="origin" defaultValue="GIAPPONE" required><option value="GIAPPONE">Giappone</option><option value="VIETNAM">Vietnam</option><option value="EUROPA">Europa</option><option value="ALTRO">Altro</option></select></label>
-              <label>Venditore<input type="text" name="seller" placeholder="Nome venditore" /></label>
-              <label>Serie<input type="text" name="series" placeholder="Serie" /></label>
-              <label>Descrizione<input type="text" name="detail" placeholder="Descrizione articolo" /></label>
-              <label>Quantità<input type="number" name="quantity_purchased" min="1" step="1" defaultValue="1" required /></label>
-              <label>Valuta<input type="text" name="currency" defaultValue="EUR" /></label>
-              <label>Prezzo unitario<input type="number" name="unit_price_foreign" min="0" step="0.01" defaultValue="0" required /></label>
-              <label>Cambio<input type="number" name="exchange_rate" min="0.0001" step="0.0001" defaultValue="1" required /></label>
-              <label>Costi accessori (€)<input type="number" name="accessory_cost_eur" min="0" step="0.01" defaultValue="0" /></label>
-              <label>Stato<select name="status" defaultValue="IN_ARRIVO"><option value="IN_ARRIVO">IN ARRIVO</option><option value="IN_STOCK">IN STOCK</option><option value="VENDUTO">VENDUTO</option></select></label>
-              <label>Link pagina del venditore<input type="url" name="photo_url" placeholder="https://..." /></label>
-              <label className="form-grid-wide">Note<textarea name="notes" rows={3} placeholder="Note opzionali" /></label>
-            </div>
-            <button type="submit">Carica articolo</button>
-          </form>
+          <h2>Registra nuovo articolo</h2>
+          <p className="muted">Scegli prima l'origine. I costi di acquisto vengono convertiti automaticamente in EUR e il costo totale/unitario viene ricalcolato anche dal database.</p>
+          <ArticleForm action={createArticle} />
         </section>
 
         {/* FILTRI */}

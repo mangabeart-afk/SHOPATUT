@@ -1,11 +1,12 @@
 import { notFound, redirect } from 'next/navigation'
 import { createClient } from '../../../../lib/supabase-server'
 import Navigation from '../../../../components/navigation'
+import ArticleForm from '../../../../components/article-form'
+import { updateArticle } from '../actions'
 
 type PageProps = {
-  params: Promise<{
-    id: string
-  }>
+  params: Promise<{ id: string }>
+  searchParams: Promise<{ message?: string; error?: string }>
 }
 
 type Assignment = {
@@ -88,8 +89,10 @@ const formatDateTime = (
 
 export default async function ArticoloDetailPage({
   params,
+  searchParams,
 }: PageProps) {
   const { id } = await params
+  const query = await searchParams
 
   const supabase = await createClient()
 
@@ -129,6 +132,7 @@ export default async function ArticoloDetailPage({
         id,
         article_code,
         photo_url,
+        seller_page_url,
         purchase_date,
         origin,
         seller,
@@ -139,6 +143,21 @@ export default async function ArticoloDetailPage({
         unit_price_foreign,
         exchange_rate,
         accessory_cost_eur,
+        commission_mode,
+        commission_percent,
+        commission_cost,
+        commission_currency,
+        commission_exchange_rate,
+        customs_mode,
+        customs_percent,
+        customs_cost,
+        customs_currency,
+        customs_exchange_rate,
+        shipping_mode,
+        shipping_percent,
+        shipping_cost,
+        shipping_currency,
+        shipping_exchange_rate,
         total_cost_eur,
         unit_cost_eur,
         notes,
@@ -414,6 +433,9 @@ export default async function ArticoloDetailPage({
       <Navigation role="AMMINISTRATORE" active="/admin/articoli" displayName={profile?.display_name} email={user.email} />
 
       <section className="content">
+        {query.message && <section className="panel"><div className="success">{query.message}</div></section>}
+        {query.error && <section className="panel"><div className="error">{query.error}</div></section>}
+
         <header className="topbar">
           <div>
             <p className="eyebrow">
@@ -543,6 +565,14 @@ export default async function ArticoloDetailPage({
               {article.notes}
             </div>
           )}
+        </section>
+
+        {/* MODIFICA ARTICOLO */}
+
+        <section className="panel">
+          <h2>Modifica articolo</h2>
+          <p className="muted">Tutti i dati modificabili. I costi totale/unitario vengono ricalcolati automaticamente dopo ogni modifica.</p>
+          <ArticleForm action={updateArticle} mode="edit" article={article} />
         </section>
 
         {/* MONITORAGGIO */}

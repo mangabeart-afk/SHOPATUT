@@ -911,3 +911,45 @@ button:disabled {
 .success { padding: 11px 12px; border-radius: 9px; background: #eef9f0; color: #216b2b; font-size: 13px; }
 @media (max-width: 1100px) { .origin-analysis-grid { grid-template-columns: repeat(4, minmax(90px, 1fr)); } }
 @media (max-width: 700px) { .origin-analysis-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } .credit-actions { min-width: 0; width: 100%; } }
+
+/* FORM ARTICOLI - ACQUISTO / COSTI / VENDITA */
+.article-form-section {
+  margin: 22px 0;
+  padding: 18px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: #fafbfc;
+}
+.article-form-section h3 { margin: 0 0 8px; font-size: 16px; }
+.origin-choice-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-top: 14px; }
+.origin-choice { display: flex; flex-direction: column; gap: 6px; padding: 16px; border: 2px solid var(--line); border-radius: 12px; background: #fff; cursor: pointer; }
+.origin-choice input { position: absolute; opacity: 0; pointer-events: none; }
+.origin-choice.selected { border-color: var(--ink); box-shadow: 0 0 0 2px #17191d10; }
+.origin-choice strong { font-size: 16px; }
+.origin-choice small { color: var(--muted); }
+.article-create-form { display: grid; gap: 16px; }
+.article-create-form .form-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+.article-create-form label { display: grid; gap: 7px; font-size: 13px; font-weight: 700; }
+.article-create-form input, .article-create-form select, .article-create-form textarea { width: 100%; padding: 11px 12px; border: 1px solid var(--line); border-radius: 9px; background: #fff; color: var(--ink); font: inherit; }
+.article-create-form input:disabled { background: #f0f1f3; color: #888; }
+.form-grid-wide { grid-column: 1 / -1; }
+.accessory-grid { display: grid; gap: 12px; margin-top: 14px; }
+.accessory-row { display: grid; grid-template-columns: 1.2fr 1fr 1fr 1fr; gap: 12px; padding: 14px; background: #fff; border: 1px solid var(--line); border-radius: 10px; }
+.article-cost-summary { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.article-cost-summary > div { padding: 16px; border-radius: 10px; background: #17191d; color: #fff; display: flex; justify-content: space-between; gap: 12px; align-items: center; }
+.article-cost-summary strong { font-size: 20px; }
+.checkbox-field { display: flex !important; grid-template-columns: none !important; align-items: center; gap: 8px !important; }
+.checkbox-field input { width: 18px; height: 18px; }
+.sale-inline-grid { display: grid; grid-template-columns: 1fr 180px 220px 180px; gap: 12px; margin-top: 14px; align-items: end; }
+.sale-total-preview { display: grid; gap: 5px; padding: 11px 12px; border: 1px solid var(--line); border-radius: 9px; background: #fff; min-height: 67px; }
+.sale-total-preview span { color: var(--muted); font-size: 12px; }
+.sale-total-preview strong { font-size: 18px; }
+.article-title-row { display: flex; align-items: center; gap: 7px; }
+.article-photo-link { text-decoration: none; }
+.article-detail-title { display: flex; align-items: center; gap: 10px; }
+.article-status { display: inline-flex; width: fit-content; padding: 4px 8px; border-radius: 999px; font-size: 11px !important; font-weight: 700; }
+.status-arrivo { background: #fff4d6; color: #7a5700 !important; }
+.status-stock { background: #e9f8ee; color: #216b2b !important; }
+.status-venduto { background: #eeeef1; color: #555 !important; }
+@media (max-width: 900px) { .origin-choice-grid, .article-cost-summary { grid-template-columns: 1fr; } .accessory-row, .sale-inline-grid { grid-template-columns: 1fr; } }
+@media (max-width: 700px) { .article-create-form .form-grid { grid-template-columns: 1fr; } .form-grid-wide { grid-column: auto; } }
