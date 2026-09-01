@@ -497,9 +497,13 @@ export default async function ArticoliAdminPage({
 
     if (!fallback.error) {
       articlesResult = {
-        data: (fallback.data || []).map((article: any) => ({ ...article, photo_url: null, status: 'IN_STOCK' })),
-        error: null,
-      } as typeof articlesResult
+  data: (fallback.data || []).map((article: any) => ({
+    ...article,
+    photo_url: null,
+    status: 'IN_STOCK',
+  })),
+  error: null,
+} as unknown as typeof articlesResult
     }
   }
 
