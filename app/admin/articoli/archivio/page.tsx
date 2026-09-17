@@ -1,12 +1,59 @@
-import { notFound, redirect } from 'next/navigation'
-import { createClient } from '../../../../lib/supabase-server'
-import Navigation from '../../../../components/navigation'
+import { redirect } from 'next/navigation'
+import { createClient } from '../../../lib/supabase-server'
 
-type PageProps = {
-  params: Promise<{
-    id: string
+type ArticoliAdminPageProps = {
+  searchParams: Promise<{
+    search?: string
+    status?: string
+    origin?: string
+    series?: string
+    seller?: string
+    message?: string
+    error?: string
   }>
 }
+
+type ArticleStatus =
+  | 'IN_ARRIVO'
+  | 'IN_STOCK'
+  | 'VENDUTO'
+
+type Article = {
+  id: string
+  article_code: string
+  purchase_date: string
+  origin: string
+  seller: string | null
+  series: string | null
+  detail: string | null
+  quantity_purchased: number
+  currency: string
+  unit_price_foreign: number
+  exchange_rate: number
+  accessory_cost_eur: number
+  total_cost_eur: number | null
+  unit_cost_eur: number | null
+  notes: string | null
+  status: ArticleStatus
+}
+
+type Sale = {
+  article_id: string | null
+  quantity: number | null
+  total_amount_eur: number | null
+}
+
+const money = (value: number) =>
+  new Intl.NumberFormat('it-IT', {
+    style: 'currency',
+    currency: 'EUR',
+  }).format(value || 0)
+
+const number = (value: number) =>
+  new Intl.NumberFormat('it-IT').format(value || 0)
+
+const percent = (value: number) =>
+  `${value.toFixed(1)}%`
 
 const formatDate = (value: string | null) => {
   if (!value) return '—'
@@ -18,10 +65,55 @@ const formatDate = (value: string | null) => {
   }).format(new Date(value))
 }
 
-export default async function ClienteDetailPage({
-  params,
-}: PageProps) {
-  const { id } = await params
+const normalizeOrigin = (value: string) =>
+  value.trim().toUpperCase()
+
+const statusLabel = (
+  status: ArticleStatus
+) => {
+  switch (status) {
+    case 'IN_ARRIVO':
+      return 'IN ARRIVO'
+
+    case 'IN_STOCK':
+      return 'IN STOCK'
+
+    case 'VENDUTO':
+      return 'VENDUTO'
+
+    default:
+      return status
+  }
+}
+
+const statusClass = (
+  status: ArticleStatus
+) => {
+  switch (status) {
+    case 'IN_ARRIVO':
+      return 'article-status status-arrivo'
+
+    case 'IN_STOCK':
+      return 'article-status status-stock'
+
+    case 'VENDUTO':
+      return 'article-status status-venduto'
+
+    default:
+      return 'article-status'
+  }
+}
+
+/*
+ * ============================
+ * REGISTRA ARRIVO
+ * ============================
+ */
+
+async function registerArrival(
+  formData: FormData
+) {
+  'use server'
 
   const supabase = await createClient()
 
@@ -33,61 +125,728 @@ export default async function ClienteDetailPage({
     redirect('/login')
   }
 
-  const { data: profile } = await supabase
-    .from('profiles')
-    .select('role,display_name')
-    .eq('user_id', user.id)
-    .maybeSingle()
+  const { data: profile } =
+    await supabase
+      .from('profiles')
+      .select('role')
+      .eq('user_id', user.id)
+      .maybeSingle()
 
   if (profile?.role !== 'AMMINISTRATORE') {
     redirect('/dashboard')
   }
 
-  const { data: customer, error } = await supabase
-    .from('customers')
+  const articleIds = formData
+    .getAll('article_id')
+    .map((value) => String(value))
+    .filter(Boolean)
+
+  if (articleIds.length === 0) {
+    redirect(
+      '/admin/articoli?error=Nessun articolo selezionato.'
+    )
+  }
+
+  const { error } =
+    await supabase.rpc(
+      'register_article_arrival',
+      {
+        p_article_ids: articleIds,
+      }
+    )
+
+  if (error) {
+    redirect(
+      `/admin/articoli?error=${encodeURIComponent(
+        error.message
+      )}`
+    )
+  }
+
+  redirect(
+    '/admin/articoli?message=Arrivo registrato correttamente.'
+  )
+}
+
+/*
+ * ============================
+ * REGISTRA VENDITA
+ * ============================
+ */
+
+async function registerSale(
+  formData: FormData
+) {
+  'use server'
+
+  const supabase = await createClient()
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+
+  if (!user) {
+    redirect('/login')
+  }
+
+  const { data: profile } =
+    await supabase
+      .from('profiles')
+      .select('role')
+      .eq('user_id', user.id)
+      .maybeSingle()
+
+  if (profile?.role !== 'AMMINISTRATORE') {
+    redirect('/dashboard')
+  }
+
+  const customerCode = String(
+    formData.get('customer_code') || ''
+  )
+    .trim()
+    .toUpperCase()
+
+  if (!customerCode) {
+    redirect(
+      '/admin/articoli?error=Il codice cliente è obbligatorio.'
+    )
+  }
+
+  const articleIds = formData
+    .getAll('sale_article_id')
+    .map((value) => String(value))
+    .filter(Boolean)
+
+  if (articleIds.length === 0) {
+    redirect(
+      '/admin/articoli?error=Nessun articolo selezionato per la vendita.'
+    )
+  }
+
+  const lines = articleIds.map(
+    (articleId) => ({
+      article_id: articleId,
+      quantity: Number(
+        formData.get(
+          `qty_${articleId}`
+        ) || 0
+      ),
+      price: Number(
+        formData.get(
+          `price_${articleId}`
+        ) || 0
+      ),
+    })
+  )
+
+  const { error } =
+    await supabase.rpc(
+      'register_article_sales',
+      {
+        p_customer_code:
+          customerCode,
+        p_lines: lines,
+      }
+    )
+
+  if (error) {
+    redirect(
+      `/admin/articoli?error=${encodeURIComponent(
+        error.message
+      )}`
+    )
+  }
+
+  redirect(
+    `/admin/articoli?message=${encodeURIComponent(
+      `Vendita registrata per il cliente ${customerCode}.`
+    )}`
+  )
+}
+
+/*
+ * ============================
+ * PAGINA
+ * ============================
+ */
+
+export default async function ArticoliAdminPage({
+  searchParams,
+}: ArticoliAdminPageProps) {
+  const supabase = await createClient()
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+
+  if (!user) {
+    redirect('/login')
+  }
+
+  const { data: profile } =
+    await supabase
+      .from('profiles')
+      .select(
+        'role,display_name'
+      )
+      .eq('user_id', user.id)
+      .maybeSingle()
+
+  if (profile?.role !== 'AMMINISTRATORE') {
+    redirect('/dashboard')
+  }
+
+  const params = await searchParams
+
+  const search =
+    params.search?.trim() || ''
+
+  const selectedStatus =
+    params.status?.trim() || ''
+
+  const selectedOrigin =
+    params.origin?.trim() || ''
+
+  const selectedSeries =
+    params.series?.trim() || ''
+
+  const selectedSeller =
+    params.seller?.trim() || ''
+
+  const message =
+    params.message?.trim() || ''
+
+  const errorMessage =
+    params.error?.trim() || ''
+
+  /*
+   * ============================
+   * QUERY ARTICOLI
+   * ============================
+   */
+
+  let articlesQuery = supabase
+    .from('articles')
     .select(
       `
         id,
-        
-        first_name,
-        last_name,
-        email,
-        phone,
+        article_code,
+        purchase_date,
+        origin,
+        seller,
+        series,
+        detail,
+        quantity_purchased,
+        currency,
+        unit_price_foreign,
+        exchange_rate,
+        accessory_cost_eur,
+        total_cost_eur,
+        unit_cost_eur,
         notes,
-        shipping_address,
-        shipping_city,
-        shipping_postal_code,
-        shipping_country,
-        created_at
+        status
       `
     )
-    .eq('id', id)
-    .maybeSingle()
+    .order('purchase_date', {
+      ascending: false,
+    })
 
-  if (error || !customer) {
-    notFound()
+  if (search) {
+    const safeSearch =
+      search.replace(
+        /[%_]/g,
+        '\\$&'
+      )
+
+    articlesQuery =
+      articlesQuery.or(
+        `article_code.ilike.%${safeSearch}%,origin.ilike.%${safeSearch}%,seller.ilike.%${safeSearch}%,series.ilike.%${safeSearch}%,detail.ilike.%${safeSearch}%,status.ilike.%${safeSearch}%`
+      )
   }
 
-  const { data: customerMailboxes } = await supabase
-    .from('mailboxes')
-    .select('id,mailbox_code,status,opened_at,notes')
-    .eq('customer_id', id)
-    .order('created_at', { ascending: true })
+  if (selectedStatus) {
+    articlesQuery =
+      articlesQuery.eq(
+        'status',
+        selectedStatus
+      )
+  }
 
-  const mailbox = customerMailboxes?.[0] || null
+  if (selectedOrigin) {
+    articlesQuery =
+      articlesQuery.eq(
+        'origin',
+        selectedOrigin
+      )
+  }
 
-  const fullName =
-    `${customer.first_name || ''} ${customer.last_name || ''}`.trim()
+  if (selectedSeries) {
+    articlesQuery =
+      articlesQuery.ilike(
+        'series',
+        `%${selectedSeries}%`
+      )
+  }
 
-  const shippingAddressExists =
-    Boolean(customer.shipping_address) ||
-    Boolean(customer.shipping_city) ||
-    Boolean(customer.shipping_postal_code) ||
-    Boolean(customer.shipping_country)
+  if (selectedSeller) {
+    articlesQuery =
+      articlesQuery.ilike(
+        'seller',
+        `%${selectedSeller}%`
+      )
+  }
+
+  const [
+    articlesResult,
+    salesResult,
+  ] = await Promise.all([
+    articlesQuery,
+
+    supabase
+      .from('movements')
+      .select(
+        `
+          article_id,
+          quantity,
+          total_amount_eur
+        `
+      )
+      .eq(
+        'movement_type',
+        'VENDITA'
+      ),
+  ])
+
+  /*
+   * ============================
+   * ERRORI
+   * ============================
+   */
+
+  if (articlesResult.error) {
+    return (
+      <main className="shell">
+        <aside className="sidebar">
+          <div className="brand">
+            MangaBEART <span>[ShopaTüT]</span>
+          </div>
+
+          <nav>
+            <a href="/admin">
+              Dashboard
+            </a>
+
+            <a href="/admin/clienti">
+              Clienti
+            </a>
+
+            <a href="/admin/caselle">
+              Caselle
+            </a>
+
+            <a
+              href="/admin/articoli"
+              className="active"
+            >
+              Articoli
+            </a>
+
+            <a href="/admin/pagamenti">
+              Pagamenti
+            </a>
+
+            <a href="/admin/crediti">
+              Crediti
+            </a>
+
+            <a href="/admin/spedizioni">
+              Spedizioni
+            </a>
+
+            <a href="/admin/movimenti">
+              Movimenti
+            </a>
+          </nav>
+
+          <div className="side-note">
+            V1 • AMMINISTRATORE
+            <br />
+            {profile?.display_name ||
+              user.email}
+          </div>
+        </aside>
+
+        <section className="content">
+          <header className="topbar">
+            <div>
+              <p className="eyebrow">
+                AMMINISTRAZIONE
+              </p>
+
+              <h1>Articoli</h1>
+            </div>
+
+            <a
+              href="/admin"
+              className="back-button"
+            >
+              ← Dashboard
+            </a>
+          </header>
+
+          <section className="panel">
+            <h2>Articoli</h2>
+
+            <div className="empty">
+              Impossibile caricare gli
+              articoli.
+            </div>
+          </section>
+        </section>
+      </main>
+    )
+  }
+
+  const articles =
+    (articlesResult.data ||
+      []) as Article[]
+
+  const sales =
+    (salesResult.data ||
+      []) as Sale[]
+
+  /*
+   * ============================
+   * VENDITE PER ARTICOLO
+   * ============================
+   */
+
+  const soldByArticle =
+    new Map<string, number>()
+
+  const revenueByArticle =
+    new Map<string, number>()
+
+  for (const sale of sales) {
+    if (!sale.article_id) {
+      continue
+    }
+
+    soldByArticle.set(
+      sale.article_id,
+      (soldByArticle.get(
+        sale.article_id
+      ) || 0) +
+        Number(
+          sale.quantity || 0
+        )
+    )
+
+    revenueByArticle.set(
+      sale.article_id,
+      (revenueByArticle.get(
+        sale.article_id
+      ) || 0) +
+        Number(
+          sale.total_amount_eur ||
+            0
+        )
+    )
+  }
+
+  /*
+   * ============================
+   * STATISTICHE
+   * ============================
+   */
+
+  const stats = articles.map(
+    (article) => {
+      const purchased =
+        Number(
+          article.quantity_purchased ||
+            0
+        )
+
+      const sold =
+        Number(
+          soldByArticle.get(
+            article.id
+          ) || 0
+        )
+
+      const available =
+        Math.max(
+          0,
+          purchased - sold
+        )
+
+      const revenue =
+        Number(
+          revenueByArticle.get(
+            article.id
+          ) || 0
+        )
+
+      const unitCost =
+        Number(
+          article.unit_cost_eur ||
+            0
+        )
+
+      const costOfSold =
+        sold * unitCost
+
+      const margin =
+        revenue - costOfSold
+
+      const marginPercent =
+        revenue > 0
+          ? (margin / revenue) *
+            100
+          : 0
+
+      return {
+        article,
+        purchased,
+        sold,
+        available,
+        revenue,
+        costOfSold,
+        margin,
+        marginPercent,
+      }
+    }
+  )
+
+  /*
+   * ============================
+   * TOTALI
+   * ============================
+   */
+
+  const total = stats.reduce(
+    (acc, row) => {
+      acc.purchased +=
+        row.purchased
+
+      acc.sold +=
+        row.sold
+
+      acc.available +=
+        row.available
+
+      acc.revenue +=
+        row.revenue
+
+      acc.costOfSold +=
+        row.costOfSold
+
+      acc.margin +=
+        row.margin
+
+      return acc
+    },
+    {
+      purchased: 0,
+      sold: 0,
+      available: 0,
+      revenue: 0,
+      costOfSold: 0,
+      margin: 0,
+    }
+  )
+
+  const totalMarginPercent =
+    total.revenue > 0
+      ? (total.margin /
+          total.revenue) *
+        100
+      : 0
+
+  /*
+   * ============================
+   * PROVENIENZE
+   * ============================
+   */
+
+  const origins = [
+    'GIAPPONE',
+    'VIETNAM',
+    'EUROPA',
+    'ALTRO',
+  ]
+
+  const originStats =
+    origins.map(
+      (origin) => {
+        const rows =
+          stats.filter(
+            (row) =>
+              normalizeOrigin(
+                row.article.origin
+              ) === origin
+          )
+
+        const purchased =
+          rows.reduce(
+            (sum, row) =>
+              sum +
+              row.purchased,
+            0
+          )
+
+        const sold =
+          rows.reduce(
+            (sum, row) =>
+              sum + row.sold,
+            0
+          )
+
+        const available =
+          rows.reduce(
+            (sum, row) =>
+              sum +
+              row.available,
+            0
+          )
+
+        const revenue =
+          rows.reduce(
+            (sum, row) =>
+              sum +
+              row.revenue,
+            0
+          )
+
+        const costOfSold =
+          rows.reduce(
+            (sum, row) =>
+              sum +
+              row.costOfSold,
+            0
+          )
+
+        const margin =
+          rows.reduce(
+            (sum, row) =>
+              sum +
+              row.margin,
+            0
+          )
+
+        return {
+          origin,
+          purchased,
+          sold,
+          available,
+          revenue,
+          costOfSold,
+          margin,
+        }
+      }
+    )
+
+  const originLabel = (
+    origin: string
+  ) => {
+    switch (origin) {
+      case 'GIAPPONE':
+        return '🇯🇵 Giappone'
+
+      case 'VIETNAM':
+        return '🇻🇳 Vietnam'
+
+      case 'EUROPA':
+        return '🇪🇺 Europa'
+
+      default:
+        return 'Altro'
+    }
+  }
+
+  /*
+   * ============================
+   * LISTE OPERATIVE
+   * ============================
+   */
+
+  const incomingStats =
+    stats.filter(
+      (row) =>
+        row.article.status ===
+        'IN_ARRIVO'
+    )
+
+  const sellableStats =
+    stats.filter(
+      (row) =>
+        row.available > 0 &&
+        (
+          row.article.status ===
+            'IN_STOCK' ||
+          row.article.status ===
+            'IN_ARRIVO'
+        )
+    )
+
+  /*
+   * ============================
+   * RENDER
+   * ============================
+   */
 
   return (
     <main className="shell">
-      <Navigation role="AMMINISTRATORE" active="/admin/clienti" displayName={profile?.display_name} email={user.email} />
+      <aside className="sidebar">
+        <div className="brand">
+          MangaBEART <span>[ShopaTüT]</span>
+        </div>
+
+        <nav>
+          <a href="/admin">
+            Dashboard
+          </a>
+
+          <a href="/admin/clienti">
+            Clienti
+          </a>
+
+          <a href="/admin/caselle">
+            Caselle
+          </a>
+
+          <a
+            href="/admin/articoli"
+            className="active"
+          >
+            Articoli
+          </a>
+
+          <a href="/admin/pagamenti">
+            Pagamenti
+          </a>
+
+          <a href="/admin/crediti">
+            Crediti
+          </a>
+
+          <a href="/admin/spedizioni">
+            Spedizioni
+          </a>
+
+          <a href="/admin/movimenti">
+            Movimenti
+          </a>
+        </nav>
+
+        <div className="side-note">
+          V1 • AMMINISTRATORE
+          <br />
+          {profile?.display_name ||
+            user.email}
+        </div>
+      </aside>
 
       <section className="content">
         <header className="topbar">
@@ -96,193 +855,754 @@ export default async function ClienteDetailPage({
               AMMINISTRAZIONE
             </p>
 
-            <h1>
-              {fullName || 'Cliente'}
-            </h1>
+            <h1>Articoli</h1>
           </div>
 
           <a
-            href="/admin/clienti"
+            href="/admin"
             className="back-button"
           >
-            ← Clienti
+            ← Dashboard
           </a>
         </header>
 
-        {/* ANAGRAFICA CLIENTE */}
+        {message && (
+          <section className="panel">
+            <div className="success">
+              {decodeURIComponent(
+                message
+              )}
+            </div>
+          </section>
+        )}
+
+        {errorMessage && (
+          <section className="panel">
+            <div className="error">
+              {decodeURIComponent(
+                errorMessage
+              )}
+            </div>
+          </section>
+        )}
+
+        {/* FILTRI */}
 
         <section className="panel">
-          <h2>Anagrafica cliente</h2>
+          <h2>Filtri articoli</h2>
 
-          <div className="customer-details">
-            <div className="customer-detail-row">
-              <span className="muted">
-                Codice casella
-              </span>
+          <form
+            action="/admin/articoli"
+            method="get"
+            className="form"
+          >
+            <label>
+              Ricerca
 
-              <strong className="customer-value">
-                {mailbox?.mailbox_code ||
-                  '—'}
-              </strong>
-            </div>
+              <input
+                type="search"
+                name="search"
+                defaultValue={
+                  search
+                }
+                placeholder="Codice, serie, descrizione..."
+              />
+            </label>
 
-            <div className="customer-detail-row">
-              <span className="muted">
-                Nome
-              </span>
+            <label>
+              Stato
 
-              <strong className="customer-value">
-                {fullName || '—'}
-              </strong>
-            </div>
+              <select
+                name="status"
+                defaultValue={
+                  selectedStatus
+                }
+              >
+                <option value="">
+                  Tutti
+                </option>
 
-            <div className="customer-detail-row">
-              <span className="muted">
-                Email
-              </span>
+                <option value="IN_ARRIVO">
+                  IN ARRIVO
+                </option>
 
-              <strong className="customer-value">
-                {customer.email || '—'}
-              </strong>
-            </div>
+                <option value="IN_STOCK">
+                  IN STOCK
+                </option>
 
-            <div className="customer-detail-row">
-              <span className="muted">
-                Telefono
-              </span>
+                <option value="VENDUTO">
+                  VENDUTO
+                </option>
+              </select>
+            </label>
 
-              <strong className="customer-value">
-                {customer.phone || '—'}
-              </strong>
-            </div>
+            <label>
+              Provenienza
 
-            <div className="customer-detail-row">
-              <span className="muted">
-                Cliente dal
-              </span>
+              <select
+                name="origin"
+                defaultValue={
+                  selectedOrigin
+                }
+              >
+                <option value="">
+                  Tutte
+                </option>
 
-              <strong className="customer-value">
-                {formatDate(
-                  customer.created_at
-                )}
-              </strong>
-            </div>
-          </div>
+                <option value="GIAPPONE">
+                  Giappone
+                </option>
 
-          {customer.notes && (
-            <div className="customer-notes">
-              <b>Note:</b>{' '}
-              {customer.notes}
-            </div>
-          )}
+                <option value="VIETNAM">
+                  Vietnam
+                </option>
+
+                <option value="EUROPA">
+                  Europa
+                </option>
+
+                <option value="ALTRO">
+                  Altro
+                </option>
+              </select>
+            </label>
+
+            <label>
+              Serie
+
+              <input
+                type="text"
+                name="series"
+                defaultValue={
+                  selectedSeries
+                }
+                placeholder="Serie..."
+              />
+            </label>
+
+            <label>
+              Venditore
+
+              <input
+                type="text"
+                name="seller"
+                defaultValue={
+                  selectedSeller
+                }
+                placeholder="Venditore..."
+              />
+            </label>
+
+            <button type="submit">
+              Applica filtri
+            </button>
+
+            {(search ||
+              selectedStatus ||
+              selectedOrigin ||
+              selectedSeries ||
+              selectedSeller) && (
+              <a
+                href="/admin/articoli"
+                className="back-button"
+              >
+                Azzera filtri
+              </a>
+            )}
+          </form>
         </section>
 
-
-        <section className="panel">
-          <h2>Casella cliente</h2>
-          {(customerMailboxes || []).length === 0 ? <div className="empty">Nessuna casella associata.</div> : <div className="movement-list">{(customerMailboxes || []).map((mailbox: any) => <div className="movement" key={mailbox.id}><div><b>{mailbox.mailbox_code}</b><span>Stato: {mailbox.status}</span><span>Aperta: {formatDate(mailbox.opened_at)}</span>{mailbox.notes && <span>Note: {mailbox.notes}</span>}</div></div>)}</div>}
-        </section>
-        {/* INDIRIZZO DI SPEDIZIONE */}
+        {/* REGISTRA ARRIVO */}
 
         <section className="panel">
           <h2>
-            Indirizzo di spedizione
+            Registra arrivo
           </h2>
 
-          {!shippingAddressExists ? (
+          <p className="muted">
+            Seleziona tutti gli articoli
+            arrivati e conferma in un'unica
+            operazione.
+          </p>
+
+          {incomingStats.length ===
+          0 ? (
             <div className="empty">
-              Nessun indirizzo di
-              spedizione registrato.
+              Nessun articolo IN ARRIVO
+              corrispondente ai filtri.
             </div>
           ) : (
-            <div className="shipping-address">
-              {customer.shipping_address && (
-                <strong>
-                  {customer.shipping_address}
-                </strong>
-              )}
+            <form
+              action={registerArrival}
+              className="bulk-action-form"
+            >
+              <div className="article-selection-list">
+                <label className="article-select-row">
+                  <input
+                    type="checkbox"
+                    aria-label="Seleziona tutti gli articoli in arrivo"
+                  />
 
-              {(customer.shipping_postal_code ||
-                customer.shipping_city) && (
-                <span>
-                  {customer.shipping_postal_code ||
-                    ''}
-                  {customer.shipping_postal_code &&
-                  customer.shipping_city
-                    ? ' '
-                    : ''}
-                  {customer.shipping_city ||
-                    ''}
-                </span>
-              )}
+                  <span>
+                    <strong>
+                      Selezione multipla
+                    </strong>
 
-              {customer.shipping_country && (
-                <span>
-                  {customer.shipping_country}
-                </span>
-              )}
-            </div>
+                    <small>
+                      Utilizza le singole
+                      caselle sotto per
+                      scegliere gli articoli
+                    </small>
+                  </span>
+                </label>
+
+                {incomingStats.map(
+                  (row) => (
+                    <label
+                      className="article-select-row"
+                      key={
+                        row.article.id
+                      }
+                    >
+                      <input
+                        type="checkbox"
+                        name="article_id"
+                        value={
+                          row.article.id
+                        }
+                      />
+
+                      <span>
+                        <strong>
+                          {
+                            row.article
+                              .article_code
+                          }
+                        </strong>
+
+                        <small>
+                          Quantità:{' '}
+                          {
+                            row.purchased
+                          }
+                          {' · '}
+                          {
+                            row.article
+                              .origin
+                          }
+                          {' · '}
+                          {row.article
+                            .series ||
+                            'Senza serie'}
+                        </small>
+                      </span>
+                    </label>
+                  )
+                )}
+              </div>
+
+              <button type="submit">
+                Registra arrivo
+              </button>
+            </form>
           )}
         </section>
 
-        {/* GESTIONE CLIENTE */}
+        {/* REGISTRA VENDITA */}
 
         <section className="panel">
-          <h2>Gestione cliente</h2>
+          <h2>
+            Registra vendita
+          </h2>
 
-          <div className="customer-actions">
-            <a
-              href={`/admin/articoli?customer=${customer.id}`}
-              className="customer-action"
-            >
-              <span className="customer-action-title">
-                Articoli
-              </span>
+          <p className="muted">
+            Inserisci il codice cliente,
+            seleziona gli articoli e indica
+            quantità e prezzo di vendita per
+            ciascuno.
+          </p>
 
-              <span className="customer-action-text">
-                Gestisci gli articoli →
-              </span>
-            </a>
+          <form
+            action={registerSale}
+            className="bulk-action-form"
+          >
+            <label>
+              Codice cliente
 
-            <a
-              href={`/admin/pagamenti?customer=${customer.id}`}
-              className="customer-action"
-            >
-              <span className="customer-action-title">
-                Pagamenti
-              </span>
+              <input
+                type="text"
+                name="customer_code"
+                required
+                placeholder="Es. 2608AAA"
+                autoComplete="off"
+              />
+            </label>
 
-              <span className="customer-action-text">
-                Gestisci i pagamenti →
-              </span>
-            </a>
+            <div className="article-selection-list">
+              {sellableStats.map(
+                (row) => (
+                  <div
+                    className="sale-row"
+                    key={
+                      row.article.id
+                    }
+                  >
+                    <label className="sale-check">
+                      <input
+                        type="checkbox"
+                        name="sale_article_id"
+                        value={
+                          row.article.id
+                        }
+                      />
 
-            <a
-              href={`/admin/crediti?customer=${customer.id}`}
-              className="customer-action"
-            >
-              <span className="customer-action-title">
-                Crediti
-              </span>
+                      <span>
+                        <strong>
+                          {
+                            row.article
+                              .article_code
+                          }
+                        </strong>
 
-              <span className="customer-action-text">
-                Gestisci i crediti →
-              </span>
-            </a>
+                        <small>
+                          Stato:{' '}
+                          {statusLabel(
+                            row.article
+                              .status
+                          )}
+                          {' · '}
+                          Disponibili:{' '}
+                          {
+                            row.available
+                          }
+                        </small>
+                      </span>
+                    </label>
 
-            <a
-              href={`/admin/movimenti?customer=${customer.id}`}
-              className="customer-action"
-            >
-              <span className="customer-action-title">
-                Movimenti
-              </span>
+                    <label>
+                      Quantità
 
-              <span className="customer-action-text">
-                Visualizza i movimenti →
-              </span>
-            </a>
+                      <input
+                        type="number"
+                        name={`qty_${row.article.id}`}
+                        min="1"
+                        max={
+                          row.available
+                        }
+                        step="1"
+                        defaultValue="1"
+                      />
+                    </label>
+
+                    <label>
+                      Prezzo vendita
+
+                      <input
+                        type="number"
+                        name={`price_${row.article.id}`}
+                        min="0.01"
+                        step="0.01"
+                        placeholder="0,00"
+                      />
+                    </label>
+                  </div>
+                )
+              )}
+            </div>
+
+            {sellableStats.length ===
+              0 && (
+              <div className="empty">
+                Nessun articolo disponibile
+                per la vendita.
+              </div>
+            )}
+
+            {sellableStats.length >
+              0 && (
+              <button type="submit">
+                Registra vendita
+              </button>
+            )}
+          </form>
+        </section>
+
+        {/* MONITORAGGIO */}
+
+        <section className="panel">
+          <h2>
+            Monitoraggio complessivo
+          </h2>
+
+          <div className="grid">
+            <div className="card">
+              <div className="muted">
+                Acquistati
+              </div>
+
+              <strong>
+                {number(
+                  total.purchased
+                )}
+              </strong>
+
+              <small>
+                unità acquistate
+              </small>
+            </div>
+
+            <div className="card">
+              <div className="muted">
+                Venduti
+              </div>
+
+              <strong>
+                {number(total.sold)}
+              </strong>
+
+              <small>
+                unità vendute
+              </small>
+            </div>
+
+            <div className="card">
+              <div className="muted">
+                Disponibili
+              </div>
+
+              <strong>
+                {number(
+                  total.available
+                )}
+              </strong>
+
+              <small>
+                quantità residua
+              </small>
+            </div>
+
+            <div className="card">
+              <div className="muted">
+                Ricavi
+              </div>
+
+              <strong>
+                {money(
+                  total.revenue
+                )}
+              </strong>
+
+              <small>
+                da vendite
+              </small>
+            </div>
+
+            <div className="card">
+              <div className="muted">
+                Costo venduto
+              </div>
+
+              <strong>
+                {money(
+                  total.costOfSold
+                )}
+              </strong>
+
+              <small>
+                costo delle unità vendute
+              </small>
+            </div>
+
+            <div className="card">
+              <div className="muted">
+                Margine
+              </div>
+
+              <strong>
+                {money(total.margin)}
+              </strong>
+
+              <small>
+                margine commerciale
+              </small>
+            </div>
+
+            <div className="card">
+              <div className="muted">
+                Margine %
+              </div>
+
+              <strong>
+                {percent(
+                  totalMarginPercent
+                )}
+              </strong>
+
+              <small>
+                sul ricavo
+              </small>
+            </div>
           </div>
+        </section>
+
+        {/* ANALISI PROVENIENZA */}
+
+        {originStats.map(
+          (originStat) => {
+            const marginPercent =
+              originStat.revenue > 0
+                ? (originStat.margin /
+                    originStat.revenue) *
+                  100
+                : 0
+
+            return (
+              <section
+                className="panel"
+                key={
+                  originStat.origin
+                }
+              >
+                <h2>
+                  {originLabel(
+                    originStat.origin
+                  )}
+                </h2>
+
+                <div className="grid">
+                  <div className="card">
+                    <div className="muted">
+                      Acquistati
+                    </div>
+
+                    <strong>
+                      {number(
+                        originStat.purchased
+                      )}
+                    </strong>
+                  </div>
+
+                  <div className="card">
+                    <div className="muted">
+                      Venduti
+                    </div>
+
+                    <strong>
+                      {number(
+                        originStat.sold
+                      )}
+                    </strong>
+                  </div>
+
+                  <div className="card">
+                    <div className="muted">
+                      Disponibili
+                    </div>
+
+                    <strong>
+                      {number(
+                        originStat.available
+                      )}
+                    </strong>
+                  </div>
+
+                  <div className="card">
+                    <div className="muted">
+                      Ricavi
+                    </div>
+
+                    <strong>
+                      {money(
+                        originStat.revenue
+                      )}
+                    </strong>
+                  </div>
+
+                  <div className="card">
+                    <div className="muted">
+                      Costo venduto
+                    </div>
+
+                    <strong>
+                      {money(
+                        originStat.costOfSold
+                      )}
+                    </strong>
+                  </div>
+
+                  <div className="card">
+                    <div className="muted">
+                      Margine
+                    </div>
+
+                    <strong>
+                      {money(
+                        originStat.margin
+                      )}
+                    </strong>
+                  </div>
+
+                  <div className="card">
+                    <div className="muted">
+                      Margine %
+                    </div>
+
+                    <strong>
+                      {percent(
+                        marginPercent
+                      )}
+                    </strong>
+                  </div>
+                </div>
+              </section>
+            )
+          }
+        )}
+
+        {/* ELENCO ARTICOLI */}
+
+        <section className="panel">
+          <h2>
+            {search
+              ? `Risultati per "${search}"`
+              : 'Elenco articoli'}
+          </h2>
+
+          {stats.length === 0 ? (
+            <div className="empty">
+              {search
+                ? 'Nessun articolo trovato.'
+                : 'Nessun articolo registrato.'}
+            </div>
+          ) : (
+            <div className="movement-list">
+              {stats.map((row) => (
+                <div
+                  className="movement"
+                  key={
+                    row.article.id
+                  }
+                >
+                  <div>
+                    <b>
+                      {
+                        row.article
+                          .article_code
+                      }
+                    </b>
+
+                    <span
+                      className={statusClass(
+                        row.article
+                          .status
+                      )}
+                    >
+                      Stato:{' '}
+                      {statusLabel(
+                        row.article
+                          .status
+                      )}
+                    </span>
+
+                    {row.article.series && (
+                      <span>
+                        Serie:{' '}
+                        {row.article.series}
+                      </span>
+                    )}
+
+                    {row.article.detail && (
+                      <span>
+                        {
+                          row.article.detail
+                        }
+                      </span>
+                    )}
+
+                    <span>
+                      Provenienza:{' '}
+                      {
+                        row.article
+                          .origin
+                      }
+                    </span>
+
+                    {row.article.seller && (
+                      <span>
+                        Venditore:{' '}
+                        {
+                          row.article.seller
+                        }
+                      </span>
+                    )}
+
+                    <span>
+                      Acquistato il:{' '}
+                      {formatDate(
+                        row.article
+                          .purchase_date
+                      )}
+                    </span>
+                  </div>
+
+                  <div>
+                    <span>
+                      Acquistati:{' '}
+                      {number(
+                        row.purchased
+                      )}
+                    </span>
+
+                    <span>
+                      Venduti:{' '}
+                      {number(
+                        row.sold
+                      )}
+                    </span>
+
+                    <span>
+                      Disponibili:{' '}
+                      {number(
+                        row.available
+                      )}
+                    </span>
+
+                    <span>
+                      Costo unitario:{' '}
+                      {money(
+                        Number(
+                          row.article
+                            .unit_cost_eur ||
+                            0
+                        )
+                      )}
+                    </span>
+
+                    <span>
+                      Ricavi:{' '}
+                      {money(
+                        row.revenue
+                      )}
+                    </span>
+
+                    <strong>
+                      Margine:{' '}
+                      {money(
+                        row.margin
+                      )}
+                    </strong>
+
+                    <a
+                      href={`/admin/articoli/${row.article.id}`}
+                      className="back-button"
+                    >
+                      Dettaglio →
+                    </a>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </section>
       </section>
     </main>
