@@ -1,4 +1,5 @@
 import { redirect } from 'next/navigation'
+import Link from 'next/link'
 import { createClient } from '../../../../lib/supabase-server'
 
 type ArticoliAdminPageProps = {
@@ -52,9 +53,6 @@ const money = (value: number) =>
 const number = (value: number) =>
   new Intl.NumberFormat('it-IT').format(value || 0)
 
-const percent = (value: number) =>
-  `${value.toFixed(1)}%`
-
 const formatDate = (value: string | null) => {
   if (!value) return '—'
 
@@ -65,12 +63,7 @@ const formatDate = (value: string | null) => {
   }).format(new Date(value))
 }
 
-const normalizeOrigin = (value: string) =>
-  value.trim().toUpperCase()
-
-const statusLabel = (
-  status: ArticleStatus
-) => {
+const statusLabel = (status: ArticleStatus) => {
   switch (status) {
     case 'IN_ARRIVO':
       return 'IN ARRIVO'
@@ -86,9 +79,7 @@ const statusLabel = (
   }
 }
 
-const statusClass = (
-  status: ArticleStatus
-) => {
+const statusClass = (status: ArticleStatus) => {
   switch (status) {
     case 'IN_ARRIVO':
       return 'article-status status-arrivo'
@@ -110,9 +101,7 @@ const statusClass = (
  * ============================
  */
 
-async function registerArrival(
-  formData: FormData
-) {
+async function registerArrival(formData: FormData) {
   'use server'
 
   const supabase = await createClient()
@@ -125,12 +114,11 @@ async function registerArrival(
     redirect('/login')
   }
 
-  const { data: profile } =
-    await supabase
-      .from('profiles')
-      .select('role')
-      .eq('user_id', user.id)
-      .maybeSingle()
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('role')
+    .eq('user_id', user.id)
+    .maybeSingle()
 
   if (profile?.role !== 'AMMINISTRATORE') {
     redirect('/dashboard')
@@ -147,13 +135,12 @@ async function registerArrival(
     )
   }
 
-  const { error } =
-    await supabase.rpc(
-      'register_article_arrival',
-      {
-        p_article_ids: articleIds,
-      }
-    )
+  const { error } = await supabase.rpc(
+    'register_article_arrival',
+    {
+      p_article_ids: articleIds,
+    }
+  )
 
   if (error) {
     redirect(
@@ -174,9 +161,7 @@ async function registerArrival(
  * ============================
  */
 
-async function registerSale(
-  formData: FormData
-) {
+async function registerSale(formData: FormData) {
   'use server'
 
   const supabase = await createClient()
@@ -189,12 +174,11 @@ async function registerSale(
     redirect('/login')
   }
 
-  const { data: profile } =
-    await supabase
-      .from('profiles')
-      .select('role')
-      .eq('user_id', user.id)
-      .maybeSingle()
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('role')
+    .eq('user_id', user.id)
+    .maybeSingle()
 
   if (profile?.role !== 'AMMINISTRATORE') {
     redirect('/dashboard')
@@ -223,31 +207,23 @@ async function registerSale(
     )
   }
 
-  const lines = articleIds.map(
-    (articleId) => ({
-      article_id: articleId,
-      quantity: Number(
-        formData.get(
-          `qty_${articleId}`
-        ) || 0
-      ),
-      price: Number(
-        formData.get(
-          `price_${articleId}`
-        ) || 0
-      ),
-    })
-  )
+  const lines = articleIds.map((articleId) => ({
+    article_id: articleId,
+    quantity: Number(
+      formData.get(`qty_${articleId}`) || 0
+    ),
+    price: Number(
+      formData.get(`price_${articleId}`) || 0
+    ),
+  }))
 
-  const { error } =
-    await supabase.rpc(
-      'register_article_sales',
-      {
-        p_customer_code:
-          customerCode,
-        p_lines: lines,
-      }
-    )
+  const { error } = await supabase.rpc(
+    'register_article_sales',
+    {
+      p_customer_code: customerCode,
+      p_lines: lines,
+    }
+  )
 
   if (error) {
     redirect(
@@ -283,14 +259,11 @@ export default async function ArticoliAdminPage({
     redirect('/login')
   }
 
-  const { data: profile } =
-    await supabase
-      .from('profiles')
-      .select(
-        'role,display_name'
-      )
-      .eq('user_id', user.id)
-      .maybeSingle()
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('role,display_name')
+    .eq('user_id', user.id)
+    .maybeSingle()
 
   if (profile?.role !== 'AMMINISTRATORE') {
     redirect('/dashboard')
@@ -298,26 +271,13 @@ export default async function ArticoliAdminPage({
 
   const params = await searchParams
 
-  const search =
-    params.search?.trim() || ''
-
-  const selectedStatus =
-    params.status?.trim() || ''
-
-  const selectedOrigin =
-    params.origin?.trim() || ''
-
-  const selectedSeries =
-    params.series?.trim() || ''
-
-  const selectedSeller =
-    params.seller?.trim() || ''
-
-  const message =
-    params.message?.trim() || ''
-
-  const errorMessage =
-    params.error?.trim() || ''
+  const search = params.search?.trim() || ''
+  const selectedStatus = params.status?.trim() || ''
+  const selectedOrigin = params.origin?.trim() || ''
+  const selectedSeries = params.series?.trim() || ''
+  const selectedSeller = params.seller?.trim() || ''
+  const message = params.message?.trim() || ''
+  const errorMessage = params.error?.trim() || ''
 
   /*
    * ============================
@@ -352,76 +312,59 @@ export default async function ArticoliAdminPage({
     })
 
   if (search) {
-    const safeSearch =
-      search.replace(
-        /[%_]/g,
-        '\\$&'
-      )
+    const safeSearch = search.replace(
+      /[%_]/g,
+      '\\$&'
+    )
 
-    articlesQuery =
-      articlesQuery.or(
-        `article_code.ilike.%${safeSearch}%,origin.ilike.%${safeSearch}%,seller.ilike.%${safeSearch}%,series.ilike.%${safeSearch}%,detail.ilike.%${safeSearch}%,status.ilike.%${safeSearch}%`
-      )
+    articlesQuery = articlesQuery.or(
+      `article_code.ilike.%${safeSearch}%,origin.ilike.%${safeSearch}%,seller.ilike.%${safeSearch}%,series.ilike.%${safeSearch}%,detail.ilike.%${safeSearch}%,status.ilike.%${safeSearch}%`
+    )
   }
 
   if (selectedStatus) {
-    articlesQuery =
-      articlesQuery.eq(
-        'status',
-        selectedStatus
-      )
+    articlesQuery = articlesQuery.eq(
+      'status',
+      selectedStatus
+    )
   }
 
   if (selectedOrigin) {
-    articlesQuery =
-      articlesQuery.eq(
-        'origin',
-        selectedOrigin
-      )
+    articlesQuery = articlesQuery.eq(
+      'origin',
+      selectedOrigin
+    )
   }
 
   if (selectedSeries) {
-    articlesQuery =
-      articlesQuery.ilike(
-        'series',
-        `%${selectedSeries}%`
-      )
+    articlesQuery = articlesQuery.ilike(
+      'series',
+      `%${selectedSeries}%`
+    )
   }
 
   if (selectedSeller) {
-    articlesQuery =
-      articlesQuery.ilike(
-        'seller',
-        `%${selectedSeller}%`
-      )
+    articlesQuery = articlesQuery.ilike(
+      'seller',
+      `%${selectedSeller}%`
+    )
   }
 
-  const [
-    articlesResult,
-    salesResult,
-  ] = await Promise.all([
-    articlesQuery,
+  const [articlesResult, salesResult] =
+    await Promise.all([
+      articlesQuery,
 
-    supabase
-      .from('movements')
-      .select(
-        `
-          article_id,
-          quantity,
-          total_amount_eur
-        `
-      )
-      .eq(
-        'movement_type',
-        'VENDITA'
-      ),
-  ])
-
-  /*
-   * ============================
-   * ERRORI
-   * ============================
-   */
+      supabase
+        .from('movements')
+        .select(
+          `
+            article_id,
+            quantity,
+            total_amount_eur
+          `
+        )
+        .eq('movement_type', 'VENDITA'),
+    ])
 
   if (articlesResult.error) {
     return (
@@ -432,17 +375,9 @@ export default async function ArticoliAdminPage({
           </div>
 
           <nav>
-            <a href="/admin">
-              Dashboard
-            </a>
-
-            <a href="/admin/clienti">
-              Clienti
-            </a>
-
-            <a href="/admin/caselle">
-              Caselle
-            </a>
+            <a href="/admin">Dashboard</a>
+            <a href="/admin/clienti">Clienti</a>
+            <a href="/admin/caselle">Caselle</a>
 
             <a
               href="/admin/articoli"
@@ -451,28 +386,16 @@ export default async function ArticoliAdminPage({
               Articoli
             </a>
 
-            <a href="/admin/pagamenti">
-              Pagamenti
-            </a>
-
-            <a href="/admin/crediti">
-              Crediti
-            </a>
-
-            <a href="/admin/spedizioni">
-              Spedizioni
-            </a>
-
-            <a href="/admin/movimenti">
-              Movimenti
-            </a>
+            <a href="/admin/pagamenti">Pagamenti</a>
+            <a href="/admin/crediti">Crediti</a>
+            <a href="/admin/spedizioni">Spedizioni</a>
+            <a href="/admin/movimenti">Movimenti</a>
           </nav>
 
           <div className="side-note">
             V1 • AMMINISTRATORE
             <br />
-            {profile?.display_name ||
-              user.email}
+            {profile?.display_name || user.email}
           </div>
         </aside>
 
@@ -485,21 +408,13 @@ export default async function ArticoliAdminPage({
 
               <h1>Articoli</h1>
             </div>
-
-            <a
-              href="/admin"
-              className="back-button"
-            >
-              ← Dashboard
-            </a>
           </header>
 
           <section className="panel">
             <h2>Articoli</h2>
 
             <div className="empty">
-              Impossibile caricare gli
-              articoli.
+              Impossibile caricare gli articoli.
             </div>
           </section>
         </section>
@@ -508,287 +423,64 @@ export default async function ArticoliAdminPage({
   }
 
   const articles =
-    (articlesResult.data ||
-      []) as Article[]
+    (articlesResult.data || []) as Article[]
 
   const sales =
-    (salesResult.data ||
-      []) as Sale[]
+    (salesResult.data || []) as Sale[]
 
   /*
    * ============================
-   * VENDITE PER ARTICOLO
+   * DATI PER LA TABELLA
    * ============================
    */
 
-  const soldByArticle =
-    new Map<string, number>()
-
-  const revenueByArticle =
-    new Map<string, number>()
+  const soldByArticle = new Map<string, number>()
 
   for (const sale of sales) {
-    if (!sale.article_id) {
-      continue
-    }
+    if (!sale.article_id) continue
 
     soldByArticle.set(
       sale.article_id,
-      (soldByArticle.get(
-        sale.article_id
-      ) || 0) +
-        Number(
-          sale.quantity || 0
-        )
-    )
-
-    revenueByArticle.set(
-      sale.article_id,
-      (revenueByArticle.get(
-        sale.article_id
-      ) || 0) +
-        Number(
-          sale.total_amount_eur ||
-            0
-        )
+      (soldByArticle.get(sale.article_id) || 0) +
+        Number(sale.quantity || 0)
     )
   }
 
-  /*
-   * ============================
-   * STATISTICHE
-   * ============================
-   */
+  const articleRows = articles.map((article) => {
+    const purchased = Number(
+      article.quantity_purchased || 0
+    )
 
-  const stats = articles.map(
-    (article) => {
-      const purchased =
-        Number(
-          article.quantity_purchased ||
-            0
-        )
+    const sold = Number(
+      soldByArticle.get(article.id) || 0
+    )
 
-      const sold =
-        Number(
-          soldByArticle.get(
-            article.id
-          ) || 0
-        )
+    const available = Math.max(
+      0,
+      purchased - sold
+    )
 
-      const available =
-        Math.max(
-          0,
-          purchased - sold
-        )
-
-      const revenue =
-        Number(
-          revenueByArticle.get(
-            article.id
-          ) || 0
-        )
-
-      const unitCost =
-        Number(
-          article.unit_cost_eur ||
-            0
-        )
-
-      const costOfSold =
-        sold * unitCost
-
-      const margin =
-        revenue - costOfSold
-
-      const marginPercent =
-        revenue > 0
-          ? (margin / revenue) *
-            100
-          : 0
-
-      return {
-        article,
-        purchased,
-        sold,
-        available,
-        revenue,
-        costOfSold,
-        margin,
-        marginPercent,
-      }
+    return {
+      article,
+      purchased,
+      sold,
+      available,
     }
+  })
+
+  const incomingRows = articleRows.filter(
+    (row) =>
+      row.article.status === 'IN_ARRIVO'
   )
 
-  /*
-   * ============================
-   * TOTALI
-   * ============================
-   */
-
-  const total = stats.reduce(
-    (acc, row) => {
-      acc.purchased +=
-        row.purchased
-
-      acc.sold +=
-        row.sold
-
-      acc.available +=
-        row.available
-
-      acc.revenue +=
-        row.revenue
-
-      acc.costOfSold +=
-        row.costOfSold
-
-      acc.margin +=
-        row.margin
-
-      return acc
-    },
-    {
-      purchased: 0,
-      sold: 0,
-      available: 0,
-      revenue: 0,
-      costOfSold: 0,
-      margin: 0,
-    }
+  const sellableRows = articleRows.filter(
+    (row) =>
+      row.available > 0 &&
+      (
+        row.article.status === 'IN_STOCK' ||
+        row.article.status === 'IN_ARRIVO'
+      )
   )
-
-  const totalMarginPercent =
-    total.revenue > 0
-      ? (total.margin /
-          total.revenue) *
-        100
-      : 0
-
-  /*
-   * ============================
-   * PROVENIENZE
-   * ============================
-   */
-
-  const origins = [
-    'GIAPPONE',
-    'VIETNAM',
-    'EUROPA',
-    'ALTRO',
-  ]
-
-  const originStats =
-    origins.map(
-      (origin) => {
-        const rows =
-          stats.filter(
-            (row) =>
-              normalizeOrigin(
-                row.article.origin
-              ) === origin
-          )
-
-        const purchased =
-          rows.reduce(
-            (sum, row) =>
-              sum +
-              row.purchased,
-            0
-          )
-
-        const sold =
-          rows.reduce(
-            (sum, row) =>
-              sum + row.sold,
-            0
-          )
-
-        const available =
-          rows.reduce(
-            (sum, row) =>
-              sum +
-              row.available,
-            0
-          )
-
-        const revenue =
-          rows.reduce(
-            (sum, row) =>
-              sum +
-              row.revenue,
-            0
-          )
-
-        const costOfSold =
-          rows.reduce(
-            (sum, row) =>
-              sum +
-              row.costOfSold,
-            0
-          )
-
-        const margin =
-          rows.reduce(
-            (sum, row) =>
-              sum +
-              row.margin,
-            0
-          )
-
-        return {
-          origin,
-          purchased,
-          sold,
-          available,
-          revenue,
-          costOfSold,
-          margin,
-        }
-      }
-    )
-
-  const originLabel = (
-    origin: string
-  ) => {
-    switch (origin) {
-      case 'GIAPPONE':
-        return '🇯🇵 Giappone'
-
-      case 'VIETNAM':
-        return '🇻🇳 Vietnam'
-
-      case 'EUROPA':
-        return '🇪🇺 Europa'
-
-      default:
-        return 'Altro'
-    }
-  }
-
-  /*
-   * ============================
-   * LISTE OPERATIVE
-   * ============================
-   */
-
-  const incomingStats =
-    stats.filter(
-      (row) =>
-        row.article.status ===
-        'IN_ARRIVO'
-    )
-
-  const sellableStats =
-    stats.filter(
-      (row) =>
-        row.available > 0 &&
-        (
-          row.article.status ===
-            'IN_STOCK' ||
-          row.article.status ===
-            'IN_ARRIVO'
-        )
-    )
 
   /*
    * ============================
@@ -804,17 +496,9 @@ export default async function ArticoliAdminPage({
         </div>
 
         <nav>
-          <a href="/admin">
-            Dashboard
-          </a>
-
-          <a href="/admin/clienti">
-            Clienti
-          </a>
-
-          <a href="/admin/caselle">
-            Caselle
-          </a>
+          <a href="/admin">Dashboard</a>
+          <a href="/admin/clienti">Clienti</a>
+          <a href="/admin/caselle">Caselle</a>
 
           <a
             href="/admin/articoli"
@@ -823,28 +507,16 @@ export default async function ArticoliAdminPage({
             Articoli
           </a>
 
-          <a href="/admin/pagamenti">
-            Pagamenti
-          </a>
-
-          <a href="/admin/crediti">
-            Crediti
-          </a>
-
-          <a href="/admin/spedizioni">
-            Spedizioni
-          </a>
-
-          <a href="/admin/movimenti">
-            Movimenti
-          </a>
+          <a href="/admin/pagamenti">Pagamenti</a>
+          <a href="/admin/crediti">Crediti</a>
+          <a href="/admin/spedizioni">Spedizioni</a>
+          <a href="/admin/movimenti">Movimenti</a>
         </nav>
 
         <div className="side-note">
           V1 • AMMINISTRATORE
           <br />
-          {profile?.display_name ||
-            user.email}
+          {profile?.display_name || user.email}
         </div>
       </aside>
 
@@ -857,21 +529,12 @@ export default async function ArticoliAdminPage({
 
             <h1>Articoli</h1>
           </div>
-
-          <a
-            href="/admin"
-            className="back-button"
-          >
-            ← Dashboard
-          </a>
         </header>
 
         {message && (
           <section className="panel">
             <div className="success">
-              {decodeURIComponent(
-                message
-              )}
+              {decodeURIComponent(message)}
             </div>
           </section>
         )}
@@ -879,9 +542,7 @@ export default async function ArticoliAdminPage({
         {errorMessage && (
           <section className="panel">
             <div className="error">
-              {decodeURIComponent(
-                errorMessage
-              )}
+              {decodeURIComponent(errorMessage)}
             </div>
           </section>
         )}
@@ -902,9 +563,7 @@ export default async function ArticoliAdminPage({
               <input
                 type="search"
                 name="search"
-                defaultValue={
-                  search
-                }
+                defaultValue={search}
                 placeholder="Codice, serie, descrizione..."
               />
             </label>
@@ -914,9 +573,7 @@ export default async function ArticoliAdminPage({
 
               <select
                 name="status"
-                defaultValue={
-                  selectedStatus
-                }
+                defaultValue={selectedStatus}
               >
                 <option value="">
                   Tutti
@@ -941,9 +598,7 @@ export default async function ArticoliAdminPage({
 
               <select
                 name="origin"
-                defaultValue={
-                  selectedOrigin
-                }
+                defaultValue={selectedOrigin}
               >
                 <option value="">
                   Tutte
@@ -973,9 +628,7 @@ export default async function ArticoliAdminPage({
               <input
                 type="text"
                 name="series"
-                defaultValue={
-                  selectedSeries
-                }
+                defaultValue={selectedSeries}
                 placeholder="Serie..."
               />
             </label>
@@ -986,9 +639,7 @@ export default async function ArticoliAdminPage({
               <input
                 type="text"
                 name="seller"
-                defaultValue={
-                  selectedSeller
-                }
+                defaultValue={selectedSeller}
                 placeholder="Venditore..."
               />
             </label>
@@ -1012,169 +663,63 @@ export default async function ArticoliAdminPage({
           </form>
         </section>
 
-        {/* REGISTRA ARRIVO */}
+        {/* AZIONI */}
 
         <section className="panel">
-          <h2>
-            Registra arrivo
-          </h2>
+          <h2>Operazioni articoli</h2>
 
           <p className="muted">
-            Seleziona tutti gli articoli
-            arrivati e conferma in un'unica
-            operazione.
+            Seleziona gli articoli nella tabella
+            e utilizza una delle operazioni.
           </p>
 
-          {incomingStats.length ===
-          0 ? (
-            <div className="empty">
-              Nessun articolo IN ARRIVO
-              corrispondente ai filtri.
-            </div>
-          ) : (
+          <div className="article-actions">
             <form
               action={registerArrival}
-              className="bulk-action-form"
+              className="inline-form"
             >
-              <div className="article-selection-list">
-                <label className="article-select-row">
-                  <input
-                    type="checkbox"
-                    aria-label="Seleziona tutti gli articoli in arrivo"
-                  />
-
-                  <span>
-                    <strong>
-                      Selezione multipla
-                    </strong>
-
-                    <small>
-                      Utilizza le singole
-                      caselle sotto per
-                      scegliere gli articoli
-                    </small>
-                  </span>
-                </label>
-
-                {incomingStats.map(
-                  (row) => (
-                    <label
-                      className="article-select-row"
-                      key={
-                        row.article.id
-                      }
-                    >
-                      <input
-                        type="checkbox"
-                        name="article_id"
-                        value={
-                          row.article.id
-                        }
-                      />
-
-                      <span>
-                        <strong>
-                          {
-                            row.article
-                              .article_code
-                          }
-                        </strong>
-
-                        <small>
-                          Quantità:{' '}
-                          {
-                            row.purchased
-                          }
-                          {' · '}
-                          {
-                            row.article
-                              .origin
-                          }
-                          {' · '}
-                          {row.article
-                            .series ||
-                            'Senza serie'}
-                        </small>
-                      </span>
-                    </label>
-                  )
-                )}
-              </div>
-
               <button type="submit">
                 Registra arrivo
               </button>
             </form>
-          )}
-        </section>
 
-        {/* REGISTRA VENDITA */}
+            <form
+              action={registerSale}
+              className="bulk-action-form"
+            >
+              <label>
+                Codice cliente
 
-        <section className="panel">
-          <h2>
-            Registra vendita
-          </h2>
+                <input
+                  type="text"
+                  name="customer_code"
+                  required
+                  placeholder="Es. 2608AAA"
+                  autoComplete="off"
+                />
+              </label>
 
-          <p className="muted">
-            Inserisci il codice cliente,
-            seleziona gli articoli e indica
-            quantità e prezzo di vendita per
-            ciascuno.
-          </p>
-
-          <form
-            action={registerSale}
-            className="bulk-action-form"
-          >
-            <label>
-              Codice cliente
-
-              <input
-                type="text"
-                name="customer_code"
-                required
-                placeholder="Es. 2608AAA"
-                autoComplete="off"
-              />
-            </label>
-
-            <div className="article-selection-list">
-              {sellableStats.map(
-                (row) => (
+              <div className="article-selection-list">
+                {sellableRows.map((row) => (
                   <div
                     className="sale-row"
-                    key={
-                      row.article.id
-                    }
+                    key={row.article.id}
                   >
                     <label className="sale-check">
                       <input
                         type="checkbox"
                         name="sale_article_id"
-                        value={
-                          row.article.id
-                        }
+                        value={row.article.id}
                       />
 
                       <span>
                         <strong>
-                          {
-                            row.article
-                              .article_code
-                          }
+                          {row.article.article_code}
                         </strong>
 
                         <small>
-                          Stato:{' '}
-                          {statusLabel(
-                            row.article
-                              .status
-                          )}
-                          {' · '}
                           Disponibili:{' '}
-                          {
-                            row.available
-                          }
+                          {number(row.available)}
                         </small>
                       </span>
                     </label>
@@ -1186,9 +731,7 @@ export default async function ArticoliAdminPage({
                         type="number"
                         name={`qty_${row.article.id}`}
                         min="1"
-                        max={
-                          row.available
-                        }
+                        max={row.available}
                         step="1"
                         defaultValue="1"
                       />
@@ -1206,401 +749,189 @@ export default async function ArticoliAdminPage({
                       />
                     </label>
                   </div>
-                )
+                ))}
+              </div>
+
+              {sellableRows.length > 0 && (
+                <button type="submit">
+                  Registra vendita
+                </button>
               )}
-            </div>
 
-            {sellableStats.length ===
-              0 && (
-              <div className="empty">
-                Nessun articolo disponibile
-                per la vendita.
-              </div>
-            )}
-
-            {sellableStats.length >
-              0 && (
-              <button type="submit">
-                Registra vendita
-              </button>
-            )}
-          </form>
-        </section>
-
-        {/* MONITORAGGIO */}
-
-        <section className="panel">
-          <h2>
-            Monitoraggio complessivo
-          </h2>
-
-          <div className="grid">
-            <div className="card">
-              <div className="muted">
-                Acquistati
-              </div>
-
-              <strong>
-                {number(
-                  total.purchased
-                )}
-              </strong>
-
-              <small>
-                unità acquistate
-              </small>
-            </div>
-
-            <div className="card">
-              <div className="muted">
-                Venduti
-              </div>
-
-              <strong>
-                {number(total.sold)}
-              </strong>
-
-              <small>
-                unità vendute
-              </small>
-            </div>
-
-            <div className="card">
-              <div className="muted">
-                Disponibili
-              </div>
-
-              <strong>
-                {number(
-                  total.available
-                )}
-              </strong>
-
-              <small>
-                quantità residua
-              </small>
-            </div>
-
-            <div className="card">
-              <div className="muted">
-                Ricavi
-              </div>
-
-              <strong>
-                {money(
-                  total.revenue
-                )}
-              </strong>
-
-              <small>
-                da vendite
-              </small>
-            </div>
-
-            <div className="card">
-              <div className="muted">
-                Costo venduto
-              </div>
-
-              <strong>
-                {money(
-                  total.costOfSold
-                )}
-              </strong>
-
-              <small>
-                costo delle unità vendute
-              </small>
-            </div>
-
-            <div className="card">
-              <div className="muted">
-                Margine
-              </div>
-
-              <strong>
-                {money(total.margin)}
-              </strong>
-
-              <small>
-                margine commerciale
-              </small>
-            </div>
-
-            <div className="card">
-              <div className="muted">
-                Margine %
-              </div>
-
-              <strong>
-                {percent(
-                  totalMarginPercent
-                )}
-              </strong>
-
-              <small>
-                sul ricavo
-              </small>
-            </div>
+              {sellableRows.length === 0 && (
+                <div className="empty">
+                  Nessun articolo disponibile
+                  per la vendita.
+                </div>
+              )}
+            </form>
           </div>
         </section>
 
-        {/* ANALISI PROVENIENZA */}
-
-        {originStats.map(
-          (originStat) => {
-            const marginPercent =
-              originStat.revenue > 0
-                ? (originStat.margin /
-                    originStat.revenue) *
-                  100
-                : 0
-
-            return (
-              <section
-                className="panel"
-                key={
-                  originStat.origin
-                }
-              >
-                <h2>
-                  {originLabel(
-                    originStat.origin
-                  )}
-                </h2>
-
-                <div className="grid">
-                  <div className="card">
-                    <div className="muted">
-                      Acquistati
-                    </div>
-
-                    <strong>
-                      {number(
-                        originStat.purchased
-                      )}
-                    </strong>
-                  </div>
-
-                  <div className="card">
-                    <div className="muted">
-                      Venduti
-                    </div>
-
-                    <strong>
-                      {number(
-                        originStat.sold
-                      )}
-                    </strong>
-                  </div>
-
-                  <div className="card">
-                    <div className="muted">
-                      Disponibili
-                    </div>
-
-                    <strong>
-                      {number(
-                        originStat.available
-                      )}
-                    </strong>
-                  </div>
-
-                  <div className="card">
-                    <div className="muted">
-                      Ricavi
-                    </div>
-
-                    <strong>
-                      {money(
-                        originStat.revenue
-                      )}
-                    </strong>
-                  </div>
-
-                  <div className="card">
-                    <div className="muted">
-                      Costo venduto
-                    </div>
-
-                    <strong>
-                      {money(
-                        originStat.costOfSold
-                      )}
-                    </strong>
-                  </div>
-
-                  <div className="card">
-                    <div className="muted">
-                      Margine
-                    </div>
-
-                    <strong>
-                      {money(
-                        originStat.margin
-                      )}
-                    </strong>
-                  </div>
-
-                  <div className="card">
-                    <div className="muted">
-                      Margine %
-                    </div>
-
-                    <strong>
-                      {percent(
-                        marginPercent
-                      )}
-                    </strong>
-                  </div>
-                </div>
-              </section>
-            )
-          }
-        )}
-
-        {/* ELENCO ARTICOLI */}
+        {/* TABELLA ARTICOLI */}
 
         <section className="panel">
-          <h2>
-            {search
-              ? `Risultati per "${search}"`
-              : 'Elenco articoli'}
-          </h2>
+          <div className="section-heading">
+            <div>
+              <h2>
+                {search
+                  ? `Risultati per "${search}"`
+                  : 'Elenco articoli'}
+              </h2>
 
-          {stats.length === 0 ? (
+              <p className="muted">
+                {articleRows.length} articoli trovati.
+              </p>
+            </div>
+          </div>
+
+          {articleRows.length === 0 ? (
             <div className="empty">
               {search
                 ? 'Nessun articolo trovato.'
                 : 'Nessun articolo registrato.'}
             </div>
           ) : (
-            <div className="movement-list">
-              {stats.map((row) => (
-                <div
-                  className="movement"
-                  key={
-                    row.article.id
-                  }
-                >
-                  <div>
-                    <b>
-                      {
-                        row.article
-                          .article_code
-                      }
-                    </b>
+            <div className="table-wrapper">
+              <table className="articles-table">
+                <thead>
+                  <tr>
+                    <th>
+                      CODICE ARTICOLO
+                    </th>
 
-                    <span
-                      className={statusClass(
-                        row.article
-                          .status
-                      )}
-                    >
-                      Stato:{' '}
-                      {statusLabel(
-                        row.article
-                          .status
-                      )}
-                    </span>
+                    <th>DATA</th>
+                    <th>SERIE</th>
+                    <th>DETTAGLIO</th>
+                    <th>Q.TÀ</th>
+                    <th>IN STOCK</th>
+                    <th>€€</th>
+                    <th>€</th>
+                    <th>STATO</th>
+                    <th>VENDITE</th>
+                    <th>UTENTI</th>
+                  </tr>
+                </thead>
 
-                    {row.article.series && (
-                      <span>
-                        Serie:{' '}
-                        {row.article.series}
-                      </span>
-                    )}
+                <tbody>
+                  {articleRows.map((row) => {
+                    const article = row.article
 
-                    {row.article.detail && (
-                      <span>
-                        {
-                          row.article.detail
+                    return (
+                      <tr
+                        key={article.id}
+                        className={
+                          article.status === 'VENDUTO'
+                            ? 'article-row article-row-sold'
+                            : 'article-row'
                         }
-                      </span>
-                    )}
+                      >
+                        <td>
+                          <div className="article-code-cell">
+                            <strong>
+                              {article.article_code}
+                            </strong>
 
-                    <span>
-                      Provenienza:{' '}
-                      {
-                        row.article
-                          .origin
-                      }
-                    </span>
+                            <div className="article-code-tools">
+                              <input
+                                type="checkbox"
+                                name="article_id"
+                                value={article.id}
+                                aria-label={`Seleziona ${article.article_code}`}
+                              />
 
-                    {row.article.seller && (
-                      <span>
-                        Venditore:{' '}
-                        {
-                          row.article.seller
-                        }
-                      </span>
-                    )}
+                              <Link
+                                href={`/admin/articoli/${article.id}/foto`}
+                                className="photo-button"
+                                title="Apri foto articolo"
+                                aria-label={`Apri foto ${article.article_code}`}
+                              >
+                                <svg
+                                  width="17"
+                                  height="17"
+                                  viewBox="0 0 24 24"
+                                  fill="none"
+                                  stroke="currentColor"
+                                  strokeWidth="1.8"
+                                  strokeLinecap="round"
+                                  strokeLinejoin="round"
+                                  aria-hidden="true"
+                                >
+                                  <circle
+                                    cx="11"
+                                    cy="11"
+                                    r="7"
+                                  />
 
-                    <span>
-                      Acquistato il:{' '}
-                      {formatDate(
-                        row.article
-                          .purchase_date
-                      )}
-                    </span>
-                  </div>
+                                  <path d="m20 20-4-4" />
+                                </svg>
+                              </Link>
+                            </div>
+                          </div>
+                        </td>
 
-                  <div>
-                    <span>
-                      Acquistati:{' '}
-                      {number(
-                        row.purchased
-                      )}
-                    </span>
+                        <td>
+                          {formatDate(
+                            article.purchase_date
+                          )}
+                        </td>
 
-                    <span>
-                      Venduti:{' '}
-                      {number(
-                        row.sold
-                      )}
-                    </span>
+                        <td>
+                          {article.series || '—'}
+                        </td>
 
-                    <span>
-                      Disponibili:{' '}
-                      {number(
-                        row.available
-                      )}
-                    </span>
+                        <td>
+                          {article.detail || '—'}
+                        </td>
 
-                    <span>
-                      Costo unitario:{' '}
-                      {money(
-                        Number(
-                          row.article
-                            .unit_cost_eur ||
-                            0
-                        )
-                      )}
-                    </span>
+                        <td>
+                          {number(row.purchased)}
+                        </td>
 
-                    <span>
-                      Ricavi:{' '}
-                      {money(
-                        row.revenue
-                      )}
-                    </span>
+                        <td>
+                          {number(row.available)}
+                        </td>
 
-                    <strong>
-                      Margine:{' '}
-                      {money(
-                        row.margin
-                      )}
-                    </strong>
+                        <td>
+                          {money(
+                            Number(
+                              article.total_cost_eur || 0
+                            )
+                          )}
+                        </td>
 
-                    <a
-                      href={`/admin/articoli/${row.article.id}`}
-                      className="back-button"
-                    >
-                      Dettaglio →
-                    </a>
-                  </div>
-                </div>
-              ))}
+                        <td>
+                          {money(
+                            Number(
+                              article.unit_cost_eur || 0
+                            )
+                          )}
+                        </td>
+
+                        <td>
+                          <span
+                            className={statusClass(
+                              article.status
+                            )}
+                          >
+                            {statusLabel(
+                              article.status
+                            )}
+                          </span>
+                        </td>
+
+                        <td>
+                          {number(row.sold)}
+                        </td>
+
+                        <td>
+                          —
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
             </div>
           )}
         </section>
