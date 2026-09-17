@@ -22,7 +22,7 @@ type ArticleStatus =
 type Article = {
   id: string
   article_code: string
-  photo: string | null
+  photo_url: string | null
   purchase_date: string
   origin: string
   seller: string | null
@@ -294,7 +294,7 @@ export default async function ArticoliAdminPage({
       `
         id,
         article_code,
-        photo,
+        photo_url,
         purchase_date,
         origin,
         seller,
@@ -810,7 +810,7 @@ export default async function ArticoliAdminPage({
                                 articleCode={
                                   article.article_code
                                 }
-                                photo={article.photo}
+                                photo={article.photo_url}
                               />
                             </div>
                           </div>
