@@ -85,7 +85,7 @@ const articlePayload = (formData: FormData) => {
     accessory_cost_eur: totalCostEur - (num(formData, 'unit_price_foreign') * quantity / ((text(formData, 'currency') || 'EUR') === 'EUR' ? 1 : num(formData, 'exchange_rate', 1))),
     total_cost_eur: totalCostEur,
     unit_cost_eur: quantity > 0 ? totalCostEur / quantity : 0,
-    photo_url: null,
+    // photo_url viene gestito separatamente durante creazione/modifica
     notes: text(formData, 'notes') || null,
     status: text(formData, 'status') || 'IN_ARRIVO',
   }
