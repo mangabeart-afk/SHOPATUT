@@ -1,59 +1,297 @@
-async function registerSale(formData: FormData) {
-  'use server'
+import { redirect } from 'next/navigation'
+import { createClient } from '../../../../lib/supabase-server'
+import Navigation from '../../../../components/navigation'
+import ArticleArchiveTable from '../../../../components/article-archive-table'
 
+type Props = {
+  searchParams: Promise<{
+    search?: string
+    message?: string
+    error?: string
+  }>
+}
+
+export default async function ArchivioArticoliPage({
+  searchParams,
+}: Props) {
   const supabase = await createClient()
 
-  const customerCode = String(
-    formData.get('customer_code') || '',
-  ).trim()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
 
-  const articleId = String(
-    formData.get('sale_article_id') || '',
-  ).trim()
+  if (!user) {
+    redirect('/login')
+  }
 
-  const quantity = Number(
-    formData.get(`qty_${articleId}`) || 0,
-  )
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('role,display_name')
+    .eq('user_id', user.id)
+    .maybeSingle()
 
-  const totalPrice = Number(
-    formData.get(`price_${articleId}`) || 0,
-  )
+  if (profile?.role !== 'AMMINISTRATORE') {
+    redirect('/dashboard')
+  }
 
-  if (!customerCode) {
+  async function registerSale(formData: FormData) {
+    'use server'
+
+    const supabase = await createClient()
+
+    const customerCode = String(
+      formData.get('customer_code') || '',
+    ).trim()
+
+    const articleId = String(
+      formData.get('sale_article_id') || '',
+    ).trim()
+
+    const quantity = Number(
+      formData.get(`qty_${articleId}`) || 0,
+    )
+
+    const totalPrice = Number(
+      formData.get(`price_${articleId}`) || 0,
+    )
+
+    if (!customerCode) {
+      redirect(
+        '/admin/articoli/archivio?error=Inserisci il nome o codice cliente',
+      )
+    }
+
+    if (!articleId) {
+      redirect(
+        '/admin/articoli/archivio?error=Articolo non selezionato',
+      )
+    }
+
+    if (!Number.isFinite(quantity) || quantity <= 0) {
+      redirect(
+        '/admin/articoli/archivio?error=Quantità non valida',
+      )
+    }
+
+    if (!Number.isFinite(totalPrice) || totalPrice < 0) {
+      redirect(
+        '/admin/articoli/archivio?error=Prezzo di vendita non valido',
+      )
+    }
+
+    const { data: article, error: articleError } = await supabase
+      .from('articles')
+      .select('id,quantity_purchased')
+      .eq('id', articleId)
+      .maybeSingle()
+
+    if (articleError || !article) {
+      redirect(
+        '/admin/articoli/archivio?error=Articolo non trovato',
+      )
+    }
+
+    const { data: movements, error: movementsError } = await supabase
+      .from('movements')
+      .select('quantity')
+      .eq('article_id', articleId)
+      .eq('movement_type', 'VENDITA')
+
+    if (movementsError) {
+      redirect(
+        `/admin/articoli/archivio?error=${encodeURIComponent(
+          movementsError.message,
+        )}`,
+      )
+    }
+
+    const soldQuantity = (movements || []).reduce(
+      (total, movement) => total + Number(movement.quantity || 0),
+      0,
+    )
+
+    const remainingQuantity =
+      Number(article.quantity_purchased || 0) - soldQuantity
+
+    if (quantity > remainingQuantity) {
+      redirect(
+        `/admin/articoli/archivio?error=${encodeURIComponent(
+          `Quantità non disponibile. Residue: ${Math.max(
+            0,
+            remainingQuantity,
+          )}`,
+        )}`,
+      )
+    }
+
+    const { error: saleError } = await supabase.rpc(
+      'register_article_sales',
+      {
+        p_customer_code: customerCode,
+        p_lines: [
+          {
+            article_id: articleId,
+            quantity,
+            total_amount_eur: totalPrice,
+          },
+        ],
+      },
+    )
+
+    if (saleError) {
+      redirect(
+        `/admin/articoli/archivio?error=${encodeURIComponent(
+          saleError.message,
+        )}`,
+      )
+    }
+
     redirect(
-      '/admin/articoli/archivio?error=Inserisci il nome o codice cliente',
+      '/admin/articoli/archivio?message=Vendita registrata correttamente',
     )
   }
 
-  if (!articleId || quantity <= 0 || totalPrice < 0) {
-    redirect(
-      '/admin/articoli/archivio?error=Dati vendita non validi',
+  const params = await searchParams
+
+  const search = (params.search || '').trim()
+  const message = params.message || ''
+  const routeError = params.error || ''
+
+  let query = supabase
+    .from('articles')
+    .select(
+      'id,article_code,purchase_date,origin,series,detail,quantity_purchased,unit_price_foreign,currency,total_cost_eur,unit_cost_eur,photo_url,status,created_at',
+    )
+    .order('purchase_date', {
+      ascending: false,
+    })
+
+  if (search) {
+    const safe = search.replace(/[%_]/g, '\\$&')
+
+    query = query.or(
+      `article_code.ilike.%${safe}%,series.ilike.%${safe}%,detail.ilike.%${safe}%,origin.ilike.%${safe}%`,
     )
   }
 
-  const { error: saleError } = await supabase.rpc(
-    'register_article_sales',
+  const { data: articles, error } = await query
+
+  const { data: movements } = await supabase
+    .from('movements')
+    .select(
+      'article_id,quantity,total_amount_eur,generic_customer_name',
+    )
+    .eq('movement_type', 'VENDITA')
+
+  const salesByArticle = new Map<
+    string,
     {
-      p_customer_code: customerCode,
-      p_lines: [
-        {
-          article_id: articleId,
-          quantity,
-          total_amount_eur: totalPrice,
-        },
-      ],
-    },
-  )
+      quantity: number
+      revenue: number
+      customers: Set<string>
+    }
+  >()
 
-  if (saleError) {
-    redirect(
-      `/admin/articoli/archivio?error=${encodeURIComponent(
-        saleError.message,
-      )}`,
-    )
+  for (const movement of movements || []) {
+    if (!movement.article_id) {
+      continue
+    }
+
+    const current = salesByArticle.get(movement.article_id) || {
+      quantity: 0,
+      revenue: 0,
+      customers: new Set<string>(),
+    }
+
+    current.quantity += Number(movement.quantity || 0)
+    current.revenue += Number(movement.total_amount_eur || 0)
+
+    if (movement.generic_customer_name) {
+      current.customers.add(
+        String(movement.generic_customer_name),
+      )
+    }
+
+    salesByArticle.set(movement.article_id, current)
   }
 
-  redirect(
-    '/admin/articoli/archivio?message=Vendita registrata correttamente',
+  const rows = (articles || []).map((article: any) => {
+    const sales = salesByArticle.get(article.id) || {
+      quantity: 0,
+      revenue: 0,
+      customers: new Set<string>(),
+    }
+
+    return {
+      ...article,
+      sold_quantity: sales.quantity,
+      sales_revenue: sales.revenue,
+      remaining_quantity: Math.max(
+        0,
+        Number(article.quantity_purchased || 0) -
+          sales.quantity,
+      ),
+      mailbox_codes: Array.from(sales.customers),
+    }
+  })
+
+  return (
+    <div className="app-shell">
+      <Navigation
+        role="AMMINISTRATORE"
+        active="/admin/articoli/archivio"
+        displayName={profile?.display_name}
+        email={user.email}
+      />
+
+      <main className="main-content">
+        <div className="page-heading">
+          <div>
+            <p className="eyebrow">ARTICOLI</p>
+
+            <h1>Archivio articoli</h1>
+
+            <p className="page-subtitle">
+              Ricerca, consultazione e vendita degli articoli
+              registrati.
+            </p>
+          </div>
+
+          <a
+            className="back-button"
+            href="/admin/articoli/nuovo"
+          >
+            + Nuovo articolo
+          </a>
+        </div>
+
+        {routeError ? (
+          <section className="panel">
+            <p className="error">{routeError}</p>
+          </section>
+        ) : null}
+
+        {message ? (
+          <section className="panel">
+            <p className="success">{message}</p>
+          </section>
+        ) : null}
+
+        {error ? (
+          <section className="panel">
+            <p className="error">
+              Impossibile caricare gli articoli:{' '}
+              {error.message}
+            </p>
+          </section>
+        ) : (
+          <ArticleArchiveTable
+            rows={rows}
+            initialSearch={search}
+            registerSale={registerSale}
+          />
+        )}
+      </main>
+    </div>
   )
 }
