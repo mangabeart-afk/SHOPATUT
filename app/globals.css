@@ -1541,3 +1541,129 @@ button { background: var(--accent); color: #fff; }
   object-fit: contain;
   border-radius: 10px;
 }
+/* ==================================================
+   ARCHIVIO ARTICOLI
+   TABELLA COMPATTA
+================================================== */
+
+.articles-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+  line-height: 1.25;
+}
+
+/* Intestazioni della tabella */
+
+.articles-table th {
+  padding: 8px 7px;
+  font-size: 10px;
+  line-height: 1.2;
+  font-weight: 700;
+  white-space: nowrap;
+  vertical-align: middle;
+}
+
+/* Celle delle righe */
+
+.articles-table td {
+  padding: 7px 7px;
+  font-size: 12px;
+  line-height: 1.25;
+  vertical-align: middle;
+}
+
+/* Altezza compatta delle righe */
+
+.articles-table .article-row {
+  height: 42px;
+}
+
+/* Codice articolo */
+
+.articles-table .article-row strong {
+  font-size: 12px;
+  line-height: 1.2;
+}
+
+/* Testi secondari */
+
+.articles-table .article-row small {
+  font-size: 10px;
+  line-height: 1.2;
+}
+
+/* Checkbox della tabella */
+
+.articles-table input[type='checkbox'] {
+  width: 14px;
+  height: 14px;
+  margin: 0;
+}
+
+/* Cella del codice articolo */
+
+.article-code-cell {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* Strumenti vicino al codice */
+
+.article-code-tools {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+/* Foto nella tabella */
+
+.articles-table img {
+  max-width: 42px;
+  max-height: 42px;
+  object-fit: cover;
+}
+
+/* Etichette dello stato */
+
+.articles-table .article-status {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 3px 6px;
+  font-size: 10px;
+  line-height: 1.1;
+  white-space: nowrap;
+}
+
+/* Celle numeriche più compatte */
+
+.articles-table td:nth-child(5),
+.articles-table td:nth-child(6),
+.articles-table td:nth-child(7),
+.articles-table td:nth-child(8),
+.articles-table td:nth-child(10) {
+  white-space: nowrap;
+}
+
+/* Codici e date su una sola riga */
+
+.articles-table td:nth-child(1),
+.articles-table td:nth-child(2) {
+  white-space: nowrap;
+}
+
+/* Migliore leggibilità quando si passa sopra una riga */
+
+.articles-table .article-row:hover {
+  background: rgba(127, 127, 127, 0.06);
+}
+
+/* Su schermi piccoli manteniamo la tabella scorrevole */
+
+.table-wrapper {
+  width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
