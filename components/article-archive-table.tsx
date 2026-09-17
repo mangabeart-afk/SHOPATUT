@@ -6,7 +6,6 @@ type ArticleRow = {
   id: string
   article_code: string
   purchase_date: string | null
-  origin?: string | null
   series?: string | null
   detail?: string | null
   total_cost_eur?: number | null
@@ -19,7 +18,9 @@ type ArticleRow = {
 type Props = {
   rows: ArticleRow[]
   initialSearch: string
-  registerSale: (formData: FormData) => void | Promise<void>
+  registerSale: (
+    formData: FormData,
+  ) => void | Promise<void>
 }
 
 export default function ArticleArchiveTable({
@@ -28,9 +29,13 @@ export default function ArticleArchiveTable({
   registerSale,
 }: Props) {
   const [search, setSearch] = useState(initialSearch)
-  const [saleArticleId, setSaleArticleId] = useState<string | null>(null)
+  const [saleArticleId, setSaleArticleId] = useState<
+    string | null
+  >(null)
 
-  const selectedArticle = rows.find((row) => row.id === saleArticleId)
+  const selectedArticle = rows.find(
+    (row) => row.id === saleArticleId,
+  )
 
   return (
     <section className="panel">
@@ -38,14 +43,19 @@ export default function ArticleArchiveTable({
         <input
           name="search"
           value={search}
-          onChange={(event) => setSearch(event.target.value)}
+          onChange={(event) =>
+            setSearch(event.target.value)
+          }
           placeholder="Cerca per codice, serie, descrizione o provenienza"
         />
 
         <button type="submit">Cerca</button>
 
         {search && (
-          <a className="back-button" href="/admin/articoli/archivio">
+          <a
+            className="back-button"
+            href="/admin/articoli/archivio"
+          >
             Azzera
           </a>
         )}
@@ -79,7 +89,9 @@ export default function ArticleArchiveTable({
 
                 <td>
                   {row.purchase_date
-                    ? new Date(row.purchase_date).toLocaleDateString('it-IT')
+                    ? new Date(
+                        row.purchase_date,
+                      ).toLocaleDateString('it-IT')
                     : '—'}
                 </td>
 
@@ -88,13 +100,17 @@ export default function ArticleArchiveTable({
                 <td>{row.detail || '—'}</td>
 
                 <td>
-                  € {Number(row.total_cost_eur || 0).toFixed(2)}
+                  € {Number(
+                    row.total_cost_eur || 0,
+                  ).toFixed(2)}
                 </td>
 
                 <td>{row.quantity_purchased}</td>
 
                 <td>
-                  € {Number(row.sales_revenue || 0).toFixed(2)}
+                  € {Number(
+                    row.sales_revenue || 0,
+                  ).toFixed(2)}
                 </td>
 
                 <td>{row.remaining_quantity}</td>
@@ -109,7 +125,9 @@ export default function ArticleArchiveTable({
                   <button
                     type="button"
                     disabled={row.remaining_quantity <= 0}
-                    onClick={() => setSaleArticleId(row.id)}
+                    onClick={() =>
+                      setSaleArticleId(row.id)
+                    }
                   >
                     Vendi
                   </button>
@@ -121,7 +139,9 @@ export default function ArticleArchiveTable({
       </div>
 
       {!rows.length && (
-        <p className="muted">Nessun articolo trovato.</p>
+        <p className="muted">
+          Nessun articolo trovato.
+        </p>
       )}
 
       {selectedArticle && (
@@ -130,15 +150,20 @@ export default function ArticleArchiveTable({
           role="dialog"
           aria-modal="true"
           aria-labelledby="sale-dialog-title"
+          onClick={() => setSaleArticleId(null)}
         >
           <div
             className="image-modal-content"
-            onClick={(event) => event.stopPropagation()}
+            onClick={(event) =>
+              event.stopPropagation()
+            }
           >
             <button
               type="button"
               className="modal-close"
-              onClick={() => setSaleArticleId(null)}
+              onClick={() =>
+                setSaleArticleId(null)
+              }
               aria-label="Chiudi"
             >
               ×
@@ -149,15 +174,23 @@ export default function ArticleArchiveTable({
             </h2>
 
             <p className="muted">
-              Articolo: <strong>{selectedArticle.article_code}</strong>
+              Articolo:{' '}
+              <strong>
+                {selectedArticle.article_code}
+              </strong>
             </p>
 
             <p className="muted">
               Quantità disponibile:{' '}
-              <strong>{selectedArticle.remaining_quantity}</strong>
+              <strong>
+                {selectedArticle.remaining_quantity}
+              </strong>
             </p>
 
-            <form action={registerSale} className="sale-form">
+            <form
+              action={registerSale}
+              className="sale-form"
+            >
               <input
                 type="hidden"
                 name="sale_article_id"
@@ -176,7 +209,9 @@ export default function ArticleArchiveTable({
                 required
               />
 
-              <label htmlFor={`qty_${selectedArticle.id}`}>
+              <label
+                htmlFor={`qty_${selectedArticle.id}`}
+              >
                 Quantità
               </label>
 
@@ -185,12 +220,16 @@ export default function ArticleArchiveTable({
                 name={`qty_${selectedArticle.id}`}
                 type="number"
                 min="1"
-                max={selectedArticle.remaining_quantity}
+                max={
+                  selectedArticle.remaining_quantity
+                }
                 defaultValue="1"
                 required
               />
 
-              <label htmlFor={`price_${selectedArticle.id}`}>
+              <label
+                htmlFor={`price_${selectedArticle.id}`}
+              >
                 Prezzo di vendita totale €
               </label>
 
@@ -212,7 +251,9 @@ export default function ArticleArchiveTable({
                 <button
                   type="button"
                   className="back-button"
-                  onClick={() => setSaleArticleId(null)}
+                  onClick={() =>
+                    setSaleArticleId(null)
+                  }
                 >
                   Annulla
                 </button>
