@@ -764,24 +764,21 @@ export default async function ArticoliAdminPage({
           ) : (
             <div className="table-wrapper">
               <table className="articles-table">
-                <thead>
-                  <tr>
-                    <th>
-                      CODICE ARTICOLO
-                    </th>
-
-                    <th>DATA</th>
-                    <th>SERIE</th>
-                    <th>DETTAGLIO</th>
-                    <th>Q.TÀ</th>
-                    <th>IN STOCK</th>
-                    <th>€€</th>
-                    <th>€</th>
-                    <th>STATO</th>
-                    <th>VENDITE</th>
-                    <th>UTENTI</th>
-                  </tr>
-                </thead>
+               <thead>
+  <tr>
+    <th>CODICE</th>
+    <th>DATA</th>
+    <th>SERIE</th>
+    <th>DETTAGLIO</th>
+    <th>Q</th>
+    <th>S</th>
+    <th>€€</th>
+    <th>€</th>
+    <th>STATO</th>
+    <th>VENDITE</th>
+    <th>UTENTI</th>
+  </tr>
+</thead>
 
                 <tbody>
                   {articleRows.map((row) => {
