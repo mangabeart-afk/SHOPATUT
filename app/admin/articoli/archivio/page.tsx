@@ -1,19 +1,28 @@
-import { redirect } from 'next/navigation'
+import { notFound, redirect } from 'next/navigation'
 import { createClient } from '../../../../lib/supabase-server'
 import Navigation from '../../../../components/navigation'
-import ArticleArchiveTable from '../../../../components/article-archive-table'
 
-type Props = {
-  searchParams: Promise<{
-    search?: string
-    message?: string
-    error?: string
+type PageProps = {
+  params: Promise<{
+    id: string
   }>
 }
 
-export default async function ArchivioArticoliPage({
-  searchParams,
-}: Props) {
+const formatDate = (value: string | null) => {
+  if (!value) return '—'
+
+  return new Intl.DateTimeFormat('it-IT', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+  }).format(new Date(value))
+}
+
+export default async function ClienteDetailPage({
+  params,
+}: PageProps) {
+  const { id } = await params
+
   const supabase = await createClient()
 
   const {
@@ -34,264 +43,248 @@ export default async function ArchivioArticoliPage({
     redirect('/dashboard')
   }
 
-  async function registerSale(formData: FormData) {
-    'use server'
-
-    const supabase = await createClient()
-
-    const customerCode = String(
-      formData.get('customer_code') || '',
-    ).trim()
-
-    const articleId = String(
-      formData.get('sale_article_id') || '',
-    ).trim()
-
-    const quantity = Number(
-      formData.get(`qty_${articleId}`) || 0,
-    )
-
-    const totalPrice = Number(
-      formData.get(`price_${articleId}`) || 0,
-    )
-
-    if (!customerCode) {
-      redirect(
-        '/admin/articoli/archivio?error=Inserisci il nome o codice cliente',
-      )
-    }
-
-    if (!articleId) {
-      redirect(
-        '/admin/articoli/archivio?error=Articolo non selezionato',
-      )
-    }
-
-    if (!Number.isFinite(quantity) || quantity <= 0) {
-      redirect(
-        '/admin/articoli/archivio?error=Quantità non valida',
-      )
-    }
-
-    if (!Number.isFinite(totalPrice) || totalPrice < 0) {
-      redirect(
-        '/admin/articoli/archivio?error=Prezzo di vendita non valido',
-      )
-    }
-
-    const { data: article, error: articleError } = await supabase
-      .from('articles')
-      .select('id,quantity_purchased')
-      .eq('id', articleId)
-      .maybeSingle()
-
-    if (articleError || !article) {
-      redirect(
-        '/admin/articoli/archivio?error=Articolo non trovato',
-      )
-    }
-
-    const { data: movements, error: movementsError } = await supabase
-      .from('movements')
-      .select('quantity')
-      .eq('article_id', articleId)
-      .eq('movement_type', 'VENDITA')
-
-    if (movementsError) {
-      redirect(
-        `/admin/articoli/archivio?error=${encodeURIComponent(
-          movementsError.message,
-        )}`,
-      )
-    }
-
-    const soldQuantity = (movements || []).reduce(
-      (total, movement) => total + Number(movement.quantity || 0),
-      0,
-    )
-
-    const remainingQuantity =
-      Number(article.quantity_purchased || 0) - soldQuantity
-
-    if (quantity > remainingQuantity) {
-      redirect(
-        `/admin/articoli/archivio?error=${encodeURIComponent(
-          `Quantità non disponibile. Residue: ${Math.max(
-            0,
-            remainingQuantity,
-          )}`,
-        )}`,
-      )
-    }
-
-    const { error: saleError } = await supabase.rpc(
-      'register_article_sales',
-      {
-        p_customer_code: customerCode,
-        p_lines: [
-          {
-            article_id: articleId,
-            quantity,
-            total_amount_eur: totalPrice,
-          },
-        ],
-      },
-    )
-
-    if (saleError) {
-      redirect(
-        `/admin/articoli/archivio?error=${encodeURIComponent(
-          saleError.message,
-        )}`,
-      )
-    }
-
-    redirect(
-      '/admin/articoli/archivio?message=Vendita registrata correttamente',
-    )
-  }
-
-  const params = await searchParams
-
-  const search = (params.search || '').trim()
-  const message = params.message || ''
-  const routeError = params.error || ''
-
-  let query = supabase
-    .from('articles')
+  const { data: customer, error } = await supabase
+    .from('customers')
     .select(
-      'id,article_code,purchase_date,origin,series,detail,quantity_purchased,unit_price_foreign,currency,total_cost_eur,unit_cost_eur,photo_url,status,created_at',
+      `
+        id,
+        
+        first_name,
+        last_name,
+        email,
+        phone,
+        notes,
+        shipping_address,
+        shipping_city,
+        shipping_postal_code,
+        shipping_country,
+        created_at
+      `
     )
-    .order('purchase_date', {
-      ascending: false,
-    })
+    .eq('id', id)
+    .maybeSingle()
 
-  if (search) {
-    const safe = search.replace(/[%_]/g, '\\$&')
-
-    query = query.or(
-      `article_code.ilike.%${safe}%,series.ilike.%${safe}%,detail.ilike.%${safe}%,origin.ilike.%${safe}%`,
-    )
+  if (error || !customer) {
+    notFound()
   }
 
-  const { data: articles, error } = await query
+  const { data: customerMailboxes } = await supabase
+    .from('mailboxes')
+    .select('id,mailbox_code,status,opened_at,notes')
+    .eq('customer_id', id)
+    .order('created_at', { ascending: true })
 
-  const { data: movements } = await supabase
-    .from('movements')
-    .select(
-      'article_id,quantity,total_amount_eur,generic_customer_name',
-    )
-    .eq('movement_type', 'VENDITA')
+  const mailbox = customerMailboxes?.[0] || null
 
-  const salesByArticle = new Map<
-    string,
-    {
-      quantity: number
-      revenue: number
-      customers: Set<string>
-    }
-  >()
+  const fullName =
+    `${customer.first_name || ''} ${customer.last_name || ''}`.trim()
 
-  for (const movement of movements || []) {
-    if (!movement.article_id) {
-      continue
-    }
-
-    const current = salesByArticle.get(movement.article_id) || {
-      quantity: 0,
-      revenue: 0,
-      customers: new Set<string>(),
-    }
-
-    current.quantity += Number(movement.quantity || 0)
-    current.revenue += Number(movement.total_amount_eur || 0)
-
-    if (movement.generic_customer_name) {
-      current.customers.add(
-        String(movement.generic_customer_name),
-      )
-    }
-
-    salesByArticle.set(movement.article_id, current)
-  }
-
-  const rows = (articles || []).map((article: any) => {
-    const sales = salesByArticle.get(article.id) || {
-      quantity: 0,
-      revenue: 0,
-      customers: new Set<string>(),
-    }
-
-    return {
-      ...article,
-      sold_quantity: sales.quantity,
-      sales_revenue: sales.revenue,
-      remaining_quantity: Math.max(
-        0,
-        Number(article.quantity_purchased || 0) -
-          sales.quantity,
-      ),
-      mailbox_codes: Array.from(sales.customers),
-    }
-  })
+  const shippingAddressExists =
+    Boolean(customer.shipping_address) ||
+    Boolean(customer.shipping_city) ||
+    Boolean(customer.shipping_postal_code) ||
+    Boolean(customer.shipping_country)
 
   return (
-    <div className="app-shell">
-      <Navigation
-        role="AMMINISTRATORE"
-        active="/admin/articoli/archivio"
-        displayName={profile?.display_name}
-        email={user.email}
-      />
+    <main className="shell">
+      <Navigation role="AMMINISTRATORE" active="/admin/clienti" displayName={profile?.display_name} email={user.email} />
 
-      <main className="main-content">
-        <div className="page-heading">
+      <section className="content">
+        <header className="topbar">
           <div>
-            <p className="eyebrow">ARTICOLI</p>
-
-            <h1>Archivio articoli</h1>
-
-            <p className="page-subtitle">
-              Ricerca, consultazione e vendita degli articoli
-              registrati.
+            <p className="eyebrow">
+              AMMINISTRAZIONE
             </p>
+
+            <h1>
+              {fullName || 'Cliente'}
+            </h1>
           </div>
 
           <a
+            href="/admin/clienti"
             className="back-button"
-            href="/admin/articoli/nuovo"
           >
-            + Nuovo articolo
+            ← Clienti
           </a>
-        </div>
+        </header>
 
-        {routeError ? (
-          <section className="panel">
-            <p className="error">{routeError}</p>
-          </section>
-        ) : null}
+        {/* ANAGRAFICA CLIENTE */}
 
-        {message ? (
-          <section className="panel">
-            <p className="success">{message}</p>
-          </section>
-        ) : null}
+        <section className="panel">
+          <h2>Anagrafica cliente</h2>
 
-        {error ? (
-          <section className="panel">
-            <p className="error">
-              Impossibile caricare gli articoli:{' '}
-              {error.message}
-            </p>
-          </section>
-        ) : (
-          <ArticleArchiveTable
-            rows={rows}
-            initialSearch={search}
-            registerSale={registerSale}
-          />
-        )}
-      </main>
-    </div>
+          <div className="customer-details">
+            <div className="customer-detail-row">
+              <span className="muted">
+                Codice casella
+              </span>
+
+              <strong className="customer-value">
+                {mailbox?.mailbox_code ||
+                  '—'}
+              </strong>
+            </div>
+
+            <div className="customer-detail-row">
+              <span className="muted">
+                Nome
+              </span>
+
+              <strong className="customer-value">
+                {fullName || '—'}
+              </strong>
+            </div>
+
+            <div className="customer-detail-row">
+              <span className="muted">
+                Email
+              </span>
+
+              <strong className="customer-value">
+                {customer.email || '—'}
+              </strong>
+            </div>
+
+            <div className="customer-detail-row">
+              <span className="muted">
+                Telefono
+              </span>
+
+              <strong className="customer-value">
+                {customer.phone || '—'}
+              </strong>
+            </div>
+
+            <div className="customer-detail-row">
+              <span className="muted">
+                Cliente dal
+              </span>
+
+              <strong className="customer-value">
+                {formatDate(
+                  customer.created_at
+                )}
+              </strong>
+            </div>
+          </div>
+
+          {customer.notes && (
+            <div className="customer-notes">
+              <b>Note:</b>{' '}
+              {customer.notes}
+            </div>
+          )}
+        </section>
+
+
+        <section className="panel">
+          <h2>Casella cliente</h2>
+          {(customerMailboxes || []).length === 0 ? <div className="empty">Nessuna casella associata.</div> : <div className="movement-list">{(customerMailboxes || []).map((mailbox: any) => <div className="movement" key={mailbox.id}><div><b>{mailbox.mailbox_code}</b><span>Stato: {mailbox.status}</span><span>Aperta: {formatDate(mailbox.opened_at)}</span>{mailbox.notes && <span>Note: {mailbox.notes}</span>}</div></div>)}</div>}
+        </section>
+        {/* INDIRIZZO DI SPEDIZIONE */}
+
+        <section className="panel">
+          <h2>
+            Indirizzo di spedizione
+          </h2>
+
+          {!shippingAddressExists ? (
+            <div className="empty">
+              Nessun indirizzo di
+              spedizione registrato.
+            </div>
+          ) : (
+            <div className="shipping-address">
+              {customer.shipping_address && (
+                <strong>
+                  {customer.shipping_address}
+                </strong>
+              )}
+
+              {(customer.shipping_postal_code ||
+                customer.shipping_city) && (
+                <span>
+                  {customer.shipping_postal_code ||
+                    ''}
+                  {customer.shipping_postal_code &&
+                  customer.shipping_city
+                    ? ' '
+                    : ''}
+                  {customer.shipping_city ||
+                    ''}
+                </span>
+              )}
+
+              {customer.shipping_country && (
+                <span>
+                  {customer.shipping_country}
+                </span>
+              )}
+            </div>
+          )}
+        </section>
+
+        {/* GESTIONE CLIENTE */}
+
+        <section className="panel">
+          <h2>Gestione cliente</h2>
+
+          <div className="customer-actions">
+            <a
+              href={`/admin/articoli?customer=${customer.id}`}
+              className="customer-action"
+            >
+              <span className="customer-action-title">
+                Articoli
+              </span>
+
+              <span className="customer-action-text">
+                Gestisci gli articoli →
+              </span>
+            </a>
+
+            <a
+              href={`/admin/pagamenti?customer=${customer.id}`}
+              className="customer-action"
+            >
+              <span className="customer-action-title">
+                Pagamenti
+              </span>
+
+              <span className="customer-action-text">
+                Gestisci i pagamenti →
+              </span>
+            </a>
+
+            <a
+              href={`/admin/crediti?customer=${customer.id}`}
+              className="customer-action"
+            >
+              <span className="customer-action-title">
+                Crediti
+              </span>
+
+              <span className="customer-action-text">
+                Gestisci i crediti →
+              </span>
+            </a>
+
+            <a
+              href={`/admin/movimenti?customer=${customer.id}`}
+              className="customer-action"
+            >
+              <span className="customer-action-title">
+                Movimenti
+              </span>
+
+              <span className="customer-action-text">
+                Visualizza i movimenti →
+              </span>
+            </a>
+          </div>
+        </section>
+      </section>
+    </main>
   )
 }
