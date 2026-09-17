@@ -1,6 +1,6 @@
 import { redirect } from 'next/navigation'
-import Link from 'next/link'
 import { createClient } from '../../../../lib/supabase-server'
+import ArticlePhotoButton from './ArticlePhotoButton'
 
 type ArticoliAdminPageProps = {
   searchParams: Promise<{
@@ -22,6 +22,7 @@ type ArticleStatus =
 type Article = {
   id: string
   article_code: string
+  photo: string | null
   purchase_date: string
   origin: string
   seller: string | null
