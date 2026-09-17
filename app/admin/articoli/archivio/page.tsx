@@ -96,11 +96,9 @@ const statusClass = (status: ArticleStatus) => {
   }
 }
 
-/*
- * ============================
- * REGISTRA ARRIVO
- * ============================
- */
+/* ============================
+   REGISTRA ARRIVO
+============================ */
 
 async function registerArrival(formData: FormData) {
   'use server'
@@ -132,7 +130,7 @@ async function registerArrival(formData: FormData) {
 
   if (articleIds.length === 0) {
     redirect(
-      '/admin/articoli?error=Nessun articolo selezionato.'
+      '/admin/articoli/archivio?error=Nessun articolo selezionato.'
     )
   }
 
@@ -145,22 +143,20 @@ async function registerArrival(formData: FormData) {
 
   if (error) {
     redirect(
-      `/admin/articoli?error=${encodeURIComponent(
+      `/admin/articoli/archivio?error=${encodeURIComponent(
         error.message
       )}`
     )
   }
 
   redirect(
-    '/admin/articoli?message=Arrivo registrato correttamente.'
+    '/admin/articoli/archivio?message=Arrivo registrato correttamente.'
   )
 }
 
-/*
- * ============================
- * REGISTRA VENDITA
- * ============================
- */
+/* ============================
+   REGISTRA VENDITA
+============================ */
 
 async function registerSale(formData: FormData) {
   'use server'
@@ -193,7 +189,7 @@ async function registerSale(formData: FormData) {
 
   if (!customerCode) {
     redirect(
-      '/admin/articoli?error=Il codice cliente è obbligatorio.'
+      '/admin/articoli/archivio?error=Il codice cliente è obbligatorio.'
     )
   }
 
@@ -204,7 +200,7 @@ async function registerSale(formData: FormData) {
 
   if (articleIds.length === 0) {
     redirect(
-      '/admin/articoli?error=Nessun articolo selezionato per la vendita.'
+      '/admin/articoli/archivio?error=Nessun articolo selezionato per la vendita.'
     )
   }
 
@@ -218,6 +214,20 @@ async function registerSale(formData: FormData) {
     ),
   }))
 
+  const invalidLine = lines.some(
+    (line) =>
+      !Number.isFinite(line.quantity) ||
+      line.quantity <= 0 ||
+      !Number.isFinite(line.price) ||
+      line.price <= 0
+  )
+
+  if (invalidLine) {
+    redirect(
+      '/admin/articoli/archivio?error=Controlla quantità e prezzo degli articoli selezionati.'
+    )
+  }
+
   const { error } = await supabase.rpc(
     'register_article_sales',
     {
@@ -228,24 +238,22 @@ async function registerSale(formData: FormData) {
 
   if (error) {
     redirect(
-      `/admin/articoli?error=${encodeURIComponent(
+      `/admin/articoli/archivio?error=${encodeURIComponent(
         error.message
       )}`
     )
   }
 
   redirect(
-    `/admin/articoli?message=${encodeURIComponent(
+    `/admin/articoli/archivio?message=${encodeURIComponent(
       `Vendita registrata per il cliente ${customerCode}.`
     )}`
   )
 }
 
-/*
- * ============================
- * PAGINA
- * ============================
- */
+/* ============================
+   PAGINA
+============================ */
 
 export default async function ArticoliAdminPage({
   searchParams,
@@ -280,18 +288,13 @@ export default async function ArticoliAdminPage({
   const message = params.message?.trim() || ''
   const errorMessage = params.error?.trim() || ''
 
-  /*
-   * ============================
-   * QUERY ARTICOLI
-   * ============================
-   */
-
   let articlesQuery = supabase
     .from('articles')
     .select(
       `
         id,
         article_code,
+        photo,
         purchase_date,
         origin,
         seller,
@@ -319,7 +322,14 @@ export default async function ArticoliAdminPage({
     )
 
     articlesQuery = articlesQuery.or(
-      `article_code.ilike.%${safeSearch}%,origin.ilike.%${safeSearch}%,seller.ilike.%${safeSearch}%,series.ilike.%${safeSearch}%,detail.ilike.%${safeSearch}%,status.ilike.%${safeSearch}%`
+      [
+        `article_code.ilike.%${safeSearch}%`,
+        `origin.ilike.%${safeSearch}%`,
+        `seller.ilike.%${safeSearch}%`,
+        `series.ilike.%${safeSearch}%`,
+        `detail.ilike.%${safeSearch}%`,
+        `status.ilike.%${safeSearch}%`,
+      ].join(',')
     )
   }
 
@@ -368,59 +378,7 @@ export default async function ArticoliAdminPage({
     ])
 
   if (articlesResult.error) {
-    return (
-      <main className="shell">
-        <aside className="sidebar">
-          <div className="brand">
-            MangaBEART <span>[ShopaTüT]</span>
-          </div>
-
-          <nav>
-            <a href="/admin">Dashboard</a>
-            <a href="/admin/clienti">Clienti</a>
-            <a href="/admin/caselle">Caselle</a>
-
-            <a
-              href="/admin/articoli"
-              className="active"
-            >
-              Articoli
-            </a>
-
-            <a href="/admin/pagamenti">Pagamenti</a>
-            <a href="/admin/crediti">Crediti</a>
-            <a href="/admin/spedizioni">Spedizioni</a>
-            <a href="/admin/movimenti">Movimenti</a>
-          </nav>
-
-          <div className="side-note">
-            V1 • AMMINISTRATORE
-            <br />
-            {profile?.display_name || user.email}
-          </div>
-        </aside>
-
-        <section className="content">
-          <header className="topbar">
-            <div>
-              <p className="eyebrow">
-                AMMINISTRAZIONE
-              </p>
-
-              <h1>Articoli</h1>
-            </div>
-          </header>
-
-          <section className="panel">
-            <h2>Articoli</h2>
-
-            <div className="empty">
-              Impossibile caricare gli articoli.
-            </div>
-          </section>
-        </section>
-      </main>
-    )
+    throw new Error(articlesResult.error.message)
   }
 
   const articles =
@@ -428,12 +386,6 @@ export default async function ArticoliAdminPage({
 
   const sales =
     (salesResult.data || []) as Sale[]
-
-  /*
-   * ============================
-   * DATI PER LA TABELLA
-   * ============================
-   */
 
   const soldByArticle = new Map<string, number>()
 
@@ -469,11 +421,6 @@ export default async function ArticoliAdminPage({
     }
   })
 
-  const incomingRows = articleRows.filter(
-    (row) =>
-      row.article.status === 'IN_ARRIVO'
-  )
-
   const sellableRows = articleRows.filter(
     (row) =>
       row.available > 0 &&
@@ -482,12 +429,6 @@ export default async function ArticoliAdminPage({
         row.article.status === 'IN_ARRIVO'
       )
   )
-
-  /*
-   * ============================
-   * RENDER
-   * ============================
-   */
 
   return (
     <main className="shell">
@@ -528,7 +469,7 @@ export default async function ArticoliAdminPage({
               AMMINISTRAZIONE
             </p>
 
-            <h1>Articoli</h1>
+            <h1>Archivio articoli</h1>
           </div>
         </header>
 
@@ -548,13 +489,11 @@ export default async function ArticoliAdminPage({
           </section>
         )}
 
-        {/* FILTRI */}
-
         <section className="panel">
           <h2>Filtri articoli</h2>
 
           <form
-            action="/admin/articoli"
+            action="/admin/articoli/archivio"
             method="get"
             className="form"
           >
@@ -655,7 +594,7 @@ export default async function ArticoliAdminPage({
               selectedSeries ||
               selectedSeller) && (
               <a
-                href="/admin/articoli"
+                href="/admin/articoli/archivio"
                 className="back-button"
               >
                 Azzera filtri
@@ -664,121 +603,153 @@ export default async function ArticoliAdminPage({
           </form>
         </section>
 
-        {/* AZIONI */}
-
         <section className="panel">
-          <h2>Operazioni articoli</h2>
+          <h2>Registra arrivo</h2>
 
           <p className="muted">
-            Seleziona gli articoli nella tabella
-            e utilizza una delle operazioni.
+            Seleziona gli articoli da registrare
+            come arrivati.
           </p>
 
-          <div className="article-actions">
-            <form
-              action={registerArrival}
-              className="inline-form"
-            >
+          <form
+            action={registerArrival}
+            className="bulk-action-form"
+          >
+            <div className="article-selection-list">
+              {articleRows
+                .filter(
+                  (row) =>
+                    row.article.status ===
+                    'IN_ARRIVO'
+                )
+                .map((row) => (
+                  <label
+                    className="selection-item"
+                    key={row.article.id}
+                  >
+                    <input
+                      type="checkbox"
+                      name="article_id"
+                      value={row.article.id}
+                    />
+
+                    <span>
+                      <strong>
+                        {row.article.article_code}
+                      </strong>
+
+                      <small>
+                        {row.article.series || '—'}
+                      </small>
+                    </span>
+                  </label>
+                ))}
+            </div>
+
+            {articleRows.some(
+              (row) =>
+                row.article.status === 'IN_ARRIVO'
+            ) ? (
               <button type="submit">
                 Registra arrivo
               </button>
-            </form>
-
-            <form
-              action={registerSale}
-              className="bulk-action-form"
-            >
-              <label>
-                Codice cliente
-
-                <input
-                  type="text"
-                  name="customer_code"
-                  required
-                  placeholder="Es. 2608AAA"
-                  autoComplete="off"
-                />
-              </label>
-
-              <div className="article-selection-list">
-                {sellableRows.map((row) => (
-                  <div
-                    className="sale-row"
-                    key={row.article.id}
-                  >
-                    <label className="sale-check">
-                      <input
-                        type="checkbox"
-                        name="sale_article_id"
-                        value={row.article.id}
-                      />
-
-                      <span>
-                        <strong>
-                          {row.article.article_code}
-                        </strong>
-
-                        <small>
-                          Disponibili:{' '}
-                          {number(row.available)}
-                        </small>
-                      </span>
-                    </label>
-
-                    <label>
-                      Quantità
-
-                      <input
-                        type="number"
-                        name={`qty_${row.article.id}`}
-                        min="1"
-                        max={row.available}
-                        step="1"
-                        defaultValue="1"
-                      />
-                    </label>
-
-                    <label>
-                      Prezzo vendita
-
-                      <input
-                        type="number"
-                        name={`price_${row.article.id}`}
-                        min="0.01"
-                        step="0.01"
-                        placeholder="0,00"
-                      />
-                    </label>
-                  </div>
-                ))}
+            ) : (
+              <div className="empty">
+                Nessun articolo in arrivo.
               </div>
-
-              {sellableRows.length > 0 && (
-                <button type="submit">
-                  Registra vendita
-                </button>
-              )}
-
-              {sellableRows.length === 0 && (
-                <div className="empty">
-                  Nessun articolo disponibile
-                  per la vendita.
-                </div>
-              )}
-            </form>
-          </div>
+            )}
+          </form>
         </section>
 
-        {/* TABELLA ARTICOLI */}
+        <section className="panel">
+          <h2>Registra vendita</h2>
+
+          <form
+            action={registerSale}
+            className="bulk-action-form"
+          >
+            <label>
+              Codice cliente
+
+              <input
+                type="text"
+                name="customer_code"
+                required
+                placeholder="Es. 2608AAA"
+                autoComplete="off"
+              />
+            </label>
+
+            <div className="article-selection-list">
+              {sellableRows.map((row) => (
+                <div
+                  className="sale-row"
+                  key={row.article.id}
+                >
+                  <label className="sale-check">
+                    <input
+                      type="checkbox"
+                      name="sale_article_id"
+                      value={row.article.id}
+                    />
+
+                    <span>
+                      <strong>
+                        {row.article.article_code}
+                      </strong>
+
+                      <small>
+                        Disponibili:{' '}
+                        {number(row.available)}
+                      </small>
+                    </span>
+                  </label>
+
+                  <label>
+                    Quantità
+
+                    <input
+                      type="number"
+                      name={`qty_${row.article.id}`}
+                      min="1"
+                      max={row.available}
+                      step="1"
+                      defaultValue="1"
+                    />
+                  </label>
+
+                  <label>
+                    Prezzo vendita
+
+                    <input
+                      type="number"
+                      name={`price_${row.article.id}`}
+                      min="0.01"
+                      step="0.01"
+                      placeholder="0,00"
+                    />
+                  </label>
+                </div>
+              ))}
+            </div>
+
+            {sellableRows.length > 0 ? (
+              <button type="submit">
+                Registra vendita
+              </button>
+            ) : (
+              <div className="empty">
+                Nessun articolo disponibile
+                per la vendita.
+              </div>
+            )}
+          </form>
+        </section>
 
         <section className="panel">
           <div className="section-heading">
             <div>
-              <h2>
-                {search
-                  ? `Risultati per "${search}"`
-                  : 'Elenco articoli'}
-              </h2>
+              <h2>Elenco articoli</h2>
 
               <p className="muted">
                 {articleRows.length} articoli trovati.
@@ -788,9 +759,7 @@ export default async function ArticoliAdminPage({
 
           {articleRows.length === 0 ? (
             <div className="empty">
-              {search
-                ? 'Nessun articolo trovato.'
-                : 'Nessun articolo registrato.'}
+              Nessun articolo trovato.
             </div>
           ) : (
             <div className="table-wrapper">
@@ -821,11 +790,7 @@ export default async function ArticoliAdminPage({
                     return (
                       <tr
                         key={article.id}
-                        className={
-                          article.status === 'VENDUTO'
-                            ? 'article-row article-row-sold'
-                            : 'article-row'
-                        }
+                        className="article-row"
                       >
                         <td>
                           <div className="article-code-cell">
@@ -841,32 +806,12 @@ export default async function ArticoliAdminPage({
                                 aria-label={`Seleziona ${article.article_code}`}
                               />
 
-                              <Link
-                                href={`/admin/articoli/${article.id}/foto`}
-                                className="photo-button"
-                                title="Apri foto articolo"
-                                aria-label={`Apri foto ${article.article_code}`}
-                              >
-                                <svg
-                                  width="17"
-                                  height="17"
-                                  viewBox="0 0 24 24"
-                                  fill="none"
-                                  stroke="currentColor"
-                                  strokeWidth="1.8"
-                                  strokeLinecap="round"
-                                  strokeLinejoin="round"
-                                  aria-hidden="true"
-                                >
-                                  <circle
-                                    cx="11"
-                                    cy="11"
-                                    r="7"
-                                  />
-
-                                  <path d="m20 20-4-4" />
-                                </svg>
-                              </Link>
+                              <ArticlePhotoButton
+                                articleCode={
+                                  article.article_code
+                                }
+                                photo={article.photo}
+                              />
                             </div>
                           </div>
                         </td>
