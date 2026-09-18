@@ -21,8 +21,8 @@ type ArticleOption = {
 
 type Props = {
   articles: ArticleOption[]
-  registerArrival: (formData: FormData) => void
-  registerSale: (formData: FormData) => void
+  registerArrival: (formData: FormData) => Promise<void>
+  registerSale: (formData: FormData) => Promise<void>
 }
 
 type SaleData = {
