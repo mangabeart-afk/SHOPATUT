@@ -11,6 +11,7 @@ type ArticleOption = {
   detail: string | null
   origin: string
   seller: string | null
+  photo_url: string | null
   quantity_purchased: number
   total_cost_eur: number | null
   unit_cost_eur: number | null
