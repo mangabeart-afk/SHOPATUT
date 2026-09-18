@@ -28,6 +28,7 @@ type Article = {
   seller: string | null
   series: string | null
   detail: string | null
+  photo_url: string | null
   quantity_purchased: number
   currency: string
   unit_price_foreign: number
@@ -486,6 +487,7 @@ export default async function ArticoliAdminPage({
       seller: article.seller,
       series: article.series,
       detail: article.detail,
+      photo_url: article.photo_url,
       quantity_purchased: purchased,
       total_cost_eur: article.total_cost_eur,
       unit_cost_eur: article.unit_cost_eur,
