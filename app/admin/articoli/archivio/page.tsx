@@ -63,7 +63,7 @@ function money(value: number | null | undefined) {
 
 function number(value: number | null | undefined) {
   return new Intl.NumberFormat('it-IT').format(
-    Number(value || 0)
+    Number(value || 0),
   )
 }
 
@@ -200,7 +200,7 @@ async function registerArrival(formData: FormData) {
 
   if (articleIds.length === 0) {
     redirect(
-      '/admin/articoli?error=Nessun articolo selezionato.'
+      '/admin/articoli?error=Nessun articolo selezionato.',
     )
   }
 
@@ -208,19 +208,19 @@ async function registerArrival(formData: FormData) {
     'register_article_arrival',
     {
       p_article_ids: articleIds,
-    }
+    },
   )
 
   if (error) {
     redirect(
       `/admin/articoli?error=${encodeURIComponent(
-        error.message
-      )}`
+        error.message,
+      )}`,
     )
   }
 
   redirect(
-    '/admin/articoli?message=Arrivo registrato correttamente.'
+    '/admin/articoli?message=Arrivo registrato correttamente.',
   )
 }
 
@@ -254,14 +254,14 @@ async function registerSale(formData: FormData) {
   }
 
   const customerCode = String(
-    formData.get('customer_code') || ''
+    formData.get('customer_code') || '',
   )
     .trim()
     .toUpperCase()
 
   if (!customerCode) {
     redirect(
-      '/admin/articoli?error=Il codice cliente è obbligatorio.'
+      '/admin/articoli?error=Il codice cliente è obbligatorio.',
     )
   }
 
@@ -272,29 +272,29 @@ async function registerSale(formData: FormData) {
 
   if (articleIds.length === 0) {
     redirect(
-      '/admin/articoli?error=Nessun articolo selezionato per la vendita.'
+      '/admin/articoli?error=Nessun articolo selezionato per la vendita.',
     )
   }
 
   const lines = articleIds.map((articleId) => ({
     article_id: articleId,
     quantity: Number(
-      formData.get(`qty_${articleId}`) || 0
+      formData.get(`qty_${articleId}`) || 0,
     ),
     price: Number(
-      formData.get(`price_${articleId}`) || 0
+      formData.get(`price_${articleId}`) || 0,
     ),
   }))
 
   const invalidLine = lines.some(
     (line) =>
       line.quantity <= 0 ||
-      line.price <= 0
+      line.price <= 0,
   )
 
   if (invalidLine) {
     redirect(
-      '/admin/articoli?error=Inserisci quantità e prezzo validi per ogni articolo selezionato.'
+      '/admin/articoli?error=Inserisci quantità e prezzo validi per ogni articolo selezionato.',
     )
   }
 
@@ -303,21 +303,21 @@ async function registerSale(formData: FormData) {
     {
       p_customer_code: customerCode,
       p_lines: lines,
-    }
+    },
   )
 
   if (error) {
     redirect(
       `/admin/articoli?error=${encodeURIComponent(
-        error.message
-      )}`
+        error.message,
+      )}`,
     )
   }
 
   redirect(
     `/admin/articoli?message=${encodeURIComponent(
-      `Vendita registrata per il cliente ${customerCode}.`
-    )}`
+      `Vendita registrata per il cliente ${customerCode}.`,
+    )}`,
   )
 }
 
@@ -386,7 +386,7 @@ export default async function ArticoliAdminPage({
         unit_cost_eur,
         notes,
         status
-      `
+      `,
     )
     .order('purchase_date', {
       ascending: false,
@@ -395,7 +395,7 @@ export default async function ArticoliAdminPage({
   if (search) {
     const safeSearch = search.replace(
       /[%_]/g,
-      '\\$&'
+      '\\$&',
     )
 
     articlesQuery = articlesQuery.or(
@@ -406,45 +406,45 @@ export default async function ArticoliAdminPage({
         `series.ilike.%${safeSearch}%`,
         `detail.ilike.%${safeSearch}%`,
         `status.ilike.%${safeSearch}%`,
-      ].join(',')
+      ].join(','),
     )
   }
 
   if (selectedStatus) {
     articlesQuery = articlesQuery.eq(
       'status',
-      selectedStatus
+      selectedStatus,
     )
   }
 
   if (selectedOrigin) {
     articlesQuery = articlesQuery.eq(
       'origin',
-      selectedOrigin
+      selectedOrigin,
     )
   }
 
   if (selectedSeries) {
     const safeSeries = selectedSeries.replace(
       /[%_]/g,
-      '\\$&'
+      '\\$&',
     )
 
     articlesQuery = articlesQuery.ilike(
       'series',
-      `%${safeSeries}%`
+      `%${safeSeries}%`,
     )
   }
 
   if (selectedSeller) {
     const safeSeller = selectedSeller.replace(
       /[%_]/g,
-      '\\$&'
+      '\\$&',
     )
 
     articlesQuery = articlesQuery.ilike(
       'seller',
-      `%${safeSeller}%`
+      `%${safeSeller}%`,
     )
   }
 
@@ -461,11 +461,11 @@ export default async function ArticoliAdminPage({
           article_id,
           quantity,
           total_amount_eur
-        `
+        `,
       )
       .eq(
         'movement_type',
-        'VENDITA'
+        'VENDITA',
       ),
   ])
 
@@ -494,13 +494,6 @@ export default async function ArticoliAdminPage({
 
               <h1>Articoli</h1>
             </div>
-
-            <a
-              href="/admin"
-              className="back-button"
-            >
-              ← Dashboard
-            </a>
           </header>
 
           <section className="panel">
@@ -538,7 +531,7 @@ export default async function ArticoliAdminPage({
     soldByArticle.set(
       sale.article_id,
       (soldByArticle.get(sale.article_id) || 0) +
-        Number(sale.quantity || 0)
+        Number(sale.quantity || 0),
     )
   }
 
@@ -550,22 +543,22 @@ export default async function ArticoliAdminPage({
 
   const articleRows = articles.map((article) => {
     const purchased = Number(
-      article.quantity_purchased || 0
+      article.quantity_purchased || 0,
     )
 
     const sold = Number(
-      soldByArticle.get(article.id) || 0
+      soldByArticle.get(article.id) || 0,
     )
 
     const available = Math.max(
       0,
-      purchased - sold
+      purchased - sold,
     )
 
     return {
       id: article.id,
       article_code: article.article_code,
-      purchase_date: article.purchase_date,
+      purchase_date: formatDate(article.purchase_date),
       origin: article.origin,
       seller: article.seller,
       series: article.series,
@@ -586,7 +579,7 @@ export default async function ArticoliAdminPage({
       selectedStatus ||
       selectedOrigin ||
       selectedSeries ||
-      selectedSeller
+      selectedSeller,
   )
 
   /*
@@ -613,13 +606,6 @@ export default async function ArticoliAdminPage({
 
             <h1>Articoli</h1>
           </div>
-
-          <a
-            href="/admin"
-            className="back-button"
-          >
-            ← Dashboard
-          </a>
         </header>
 
         {message && (
