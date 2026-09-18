@@ -3,18 +3,24 @@
 type Props = {
   articleId: string
   photoUrl: string | null
+  onOpen?: () => void
 }
 
 export default function ArticlePhotoButton({
   articleId,
   photoUrl,
+  onOpen,
 }: Props) {
   const hasPhoto = Boolean(photoUrl?.trim())
 
   return (
     <button
       type="button"
-      className="image-preview-link"
+      className={
+        hasPhoto
+          ? 'image-preview-link image-preview-active'
+          : 'image-preview-link image-preview-inactive'
+      }
       title={
         hasPhoto
           ? 'Visualizza immagine articolo'
@@ -28,6 +34,11 @@ export default function ArticlePhotoButton({
       disabled={!hasPhoto}
       onClick={() => {
         if (!hasPhoto || !photoUrl) return
+
+        if (onOpen) {
+          onOpen()
+          return
+        }
 
         window.open(
           photoUrl,
