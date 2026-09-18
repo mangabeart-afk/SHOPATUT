@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import ArticlePhotoButton from './ArticlePhotoButton'
 
 type ArticleOption = {
@@ -11,13 +11,15 @@ type ArticleOption = {
   detail: string | null
   origin: string
   seller: string | null
+  photo_url: string | null
   quantity_purchased: number
   total_cost_eur: number | null
   unit_cost_eur: number | null
   status: string
   statusLabel: string
   statusClass: string
-  photo_url: string | null
+  sold: number
+  available: number
 }
 
 type Props = {
@@ -31,20 +33,82 @@ type SaleData = {
   price: string
 }
 
+function formatMoney(value: number | null | undefined) {
+  if (value === null || value === undefined || Number.isNaN(Number(value))) {
+    return '—'
+  }
+
+  return new Intl.NumberFormat('it-IT', {
+    style: 'currency',
+    currency: 'EUR',
+  }).format(Number(value))
+}
+
+function toNumber(value: string | number | null | undefined) {
+  const number = Number(value || 0)
+
+  return Number.isFinite(number) ? number : 0
+}
+
 export default function ArchiveArticleActions({
   articles,
   registerArrival,
   registerSale,
 }: Props) {
   const [selectedIds, setSelectedIds] = useState<string[]>([])
-  const [customerCode, setCustomerCode] = useState('')
+  const [saleCustomerCode, setSaleCustomerCode] = useState('')
   const [saleData, setSaleData] = useState<Record<string, SaleData>>({})
+  const [arrivalDate, setArrivalDate] = useState('')
+  const [arrivalError, setArrivalError] = useState('')
+  const [saleError, setSaleError] = useState('')
+  const [showArrivalModal, setShowArrivalModal] = useState(false)
+  const [showSaleModal, setShowSaleModal] = useState(false)
+  const [showPhotoModal, setShowPhotoModal] = useState<string | null>(null)
+  const [saleTotal, setSaleTotal] = useState('')
+
+  const selectedArticles = useMemo(
+    () =>
+      articles.filter((article) =>
+        selectedIds.includes(article.id),
+      ),
+    [articles, selectedIds],
+  )
+
+  const selectedSummary = useMemo(() => {
+    const quantity = selectedArticles.reduce(
+      (total, article) => total + article.available,
+      0,
+    )
+
+    const purchaseValue = selectedArticles.reduce(
+      (total, article) =>
+        total + toNumber(article.total_cost_eur),
+      0,
+    )
+
+    const salesValue = selectedArticles.reduce(
+      (total, article) => {
+        const data = saleData[article.id]
+
+        if (!data) return total
+
+        return (
+          total +
+          toNumber(data.quantity) * toNumber(data.price)
+        )
+      },
+      0,
+    )
+
+    return {
+      quantity,
+      purchaseValue,
+      salesValue,
+      margin: salesValue - purchaseValue,
+    }
+  }, [saleData, selectedArticles])
 
   const hasSelection = selectedIds.length > 0
-
-  const selectedArticles = articles.filter((article) =>
-    selectedIds.includes(article.id),
-  )
 
   function toggleArticle(articleId: string) {
     setSelectedIds((current) =>
@@ -101,202 +165,181 @@ export default function ArchiveArticleActions({
     }))
   }
 
+  function openArrivalModal() {
+    setArrivalError('')
+    setArrivalDate('')
+    setShowArrivalModal(true)
+  }
+
+  function openSaleModal() {
+    setSaleError('')
+    setSaleTotal('')
+    setShowSaleModal(true)
+  }
+
+  function distributeSaleTotal() {
+    const total = toNumber(saleTotal)
+
+    if (total <= 0 || selectedArticles.length === 0) {
+      return
+    }
+
+    const totalPurchaseValue = selectedArticles.reduce(
+      (sum, article) =>
+        sum + toNumber(article.total_cost_eur),
+      0,
+    )
+
+    if (totalPurchaseValue <= 0) {
+      return
+    }
+
+    setSaleData((current) => {
+      const next = { ...current }
+
+      for (const article of selectedArticles) {
+        const purchaseValue = toNumber(
+          article.total_cost_eur,
+        )
+
+        const distributedPrice =
+          total * (purchaseValue / totalPurchaseValue)
+
+        next[article.id] = {
+          quantity: String(
+            Math.min(
+              Math.max(article.available, 0),
+              toNumber(current[article.id]?.quantity || 1),
+            ),
+          ),
+          price: distributedPrice.toFixed(2),
+        }
+      }
+
+      return next
+    })
+  }
+
   const saleIsReady =
     hasSelection &&
-    customerCode.trim().length > 0 &&
+    saleCustomerCode.trim().length > 0 &&
     selectedArticles.every((article) => {
       const data = saleData[article.id]
+      const quantity = toNumber(data?.quantity)
+      const price = toNumber(data?.price)
 
       return (
-        Number(data?.quantity || 0) > 0 &&
-        Number(data?.price || 0) > 0
+        quantity > 0 &&
+        quantity <= article.available &&
+        price > 0
       )
     })
 
-  function formatMoney(value: number | null) {
-    if (value === null || value === undefined) {
-      return '—'
-    }
-
-    return new Intl.NumberFormat('it-IT', {
-      style: 'currency',
-      currency: 'EUR',
-    }).format(Number(value))
-  }
-
   return (
-    <section className="panel">
-      <div className="section-heading">
-        <div>
-          <p className="eyebrow">ARCHIVIO</p>
-          <h2>Lista articoli</h2>
-        </div>
+    <>
+      <div className="heading-actions">
+        <button
+          type="button"
+          className="archive-action-button"
+          disabled={!hasSelection}
+          onClick={openArrivalModal}
+        >
+          REGISTRA ARRIVO
+        </button>
 
-        <div className="heading-actions">
-          <form action={registerArrival}>
-            {selectedIds.map((articleId) => (
-              <input
-                key={articleId}
-                type="hidden"
-                name="article_id"
-                value={articleId}
-              />
-            ))}
+        <button
+          type="button"
+          className="archive-action-button"
+          disabled={!hasSelection}
+          onClick={openSaleModal}
+        >
+          REGISTRA VENDITA
+        </button>
 
-            <button
-              type="submit"
-              className="archive-action-button"
-              disabled={!hasSelection}
-            >
-              REGISTRA ARRIVO
-            </button>
-          </form>
+        <button
+          type="button"
+          className="archive-action-button"
+          disabled={selectedIds.length !== 1}
+          onClick={() => {
+            if (selectedIds.length !== 1) return
 
-          <form action={registerSale}>
-            {selectedIds.map((articleId) => (
-              <input
-                key={articleId}
-                type="hidden"
-                name="sale_article_id"
-                value={articleId}
-              />
-            ))}
-
-            <input
-              type="hidden"
-              name="customer_code"
-              value={customerCode}
-            />
-
-            {selectedIds.map((articleId) => (
-              <div key={articleId}>
-                <input
-                  type="hidden"
-                  name={`qty_${articleId}`}
-                  value={saleData[articleId]?.quantity || '1'}
-                />
-
-                <input
-                  type="hidden"
-                  name={`price_${articleId}`}
-                  value={saleData[articleId]?.price || ''}
-                />
-              </div>
-            ))}
-
-            <button
-              type="submit"
-              className="archive-action-button"
-              disabled={!saleIsReady}
-            >
-              REGISTRA VENDITA
-            </button>
-          </form>
-
-          <button
-            type="button"
-            className="archive-action-button"
-            disabled={selectedIds.length !== 1}
-            onClick={() => {
-              if (selectedIds.length !== 1) return
-
-              window.location.href = `/admin/articoli/${selectedIds[0]}`
-            }}
-          >
-            MODIFICA
-          </button>
-        </div>
+            window.location.href =
+              `/admin/articoli/${selectedIds[0]}`
+          }}
+        >
+          MODIFICA
+        </button>
       </div>
 
       <div className="results-row">
         <span className="results-count">
           {articles.length} articoli
         </span>
+
+        <label className="select-all-label">
+          <input
+            type="checkbox"
+            checked={
+              articles.length > 0 &&
+              selectedIds.length === articles.length
+            }
+            onChange={toggleAll}
+          />
+          Seleziona tutti
+        </label>
       </div>
 
       {hasSelection && (
-        <div className="selected-operation-panel">
-          <div>
-            <strong>
-              {selectedIds.length} articolo/i selezionato/i
-            </strong>
+        <section className="selected-operation-panel">
+          <div className="selected-operation-heading">
+            <div>
+              <strong>
+                {selectedIds.length} articolo/i selezionato/i
+              </strong>
 
-            <p>
-              Inserisci il codice cliente, la quantità e il prezzo per
-              registrare la vendita.
-            </p>
+              <p>
+                La selezione rimane attiva anche quando cambi
+                i filtri o la ricerca.
+              </p>
+            </div>
+
+            <button
+              type="button"
+              className="clear-selection-button"
+              onClick={() => setSelectedIds([])}
+            >
+              Deseleziona
+            </button>
           </div>
 
-          <div className="sale-customer-field">
-            <label htmlFor="archive-customer-code">
-              Codice cliente
-            </label>
+          <div className="selected-summary-grid">
+            <div>
+              <span>Quantità residua</span>
+              <strong>{selectedSummary.quantity}</strong>
+            </div>
 
-            <input
-              id="archive-customer-code"
-              type="text"
-              value={customerCode}
-              onChange={(event) =>
-                setCustomerCode(event.target.value.toUpperCase())
-              }
-              placeholder="Es. A26"
-            />
+            <div>
+              <span>Valore acquisto</span>
+              <strong>
+                {formatMoney(selectedSummary.purchaseValue)}
+              </strong>
+            </div>
+
+            <div>
+              <span>Valore vendita</span>
+              <strong>
+                {formatMoney(selectedSummary.salesValue)}
+              </strong>
+            </div>
+
+            <div>
+              <span>Margine stimato</span>
+              <strong>
+                {formatMoney(selectedSummary.margin)}
+              </strong>
+            </div>
           </div>
-
-          <div className="sale-lines">
-            {selectedArticles.map((article) => (
-              <div
-                key={article.id}
-                className="sale-line"
-              >
-                <div className="sale-line-title">
-                  <strong>{article.article_code}</strong>
-
-                  <span>
-                    {article.detail || 'Senza dettaglio'}
-                  </span>
-                </div>
-
-                <label>
-                  Quantità
-
-                  <input
-                    type="number"
-                    min="1"
-                    step="1"
-                    value={saleData[article.id]?.quantity || '1'}
-                    onChange={(event) =>
-                      updateSaleData(
-                        article.id,
-                        'quantity',
-                        event.target.value,
-                      )
-                    }
-                  />
-                </label>
-
-                <label>
-                  Prezzo €
-
-                  <input
-                    type="number"
-                    min="0.01"
-                    step="0.01"
-                    value={saleData[article.id]?.price || ''}
-                    onChange={(event) =>
-                      updateSaleData(
-                        article.id,
-                        'price',
-                        event.target.value,
-                      )
-                    }
-                    placeholder="0,00"
-                  />
-                </label>
-              </div>
-            ))}
-          </div>
-        </div>
+        </section>
       )}
 
       {articles.length === 0 ? (
@@ -345,21 +388,9 @@ export default function ArchiveArticleActions({
                   </td>
 
                   <td>
-                    <div className="article-code-cell">
-                      <a
-                        href={`/admin/articoli/${article.id}`}
-                        className="article-code-link"
-                      >
-                        {article.article_code}
-                      </a>
-
-                      <div className="article-code-actions">
-                        <ArticlePhotoButton
-                          articleId={article.id}
-                          photoUrl={article.photo_url}
-                        />
-                      </div>
-                    </div>
+                    <strong className="article-code-text">
+                      {article.article_code}
+                    </strong>
                   </td>
 
                   <td>{article.purchase_date}</td>
@@ -368,21 +399,19 @@ export default function ArchiveArticleActions({
 
                   <td>
                     <div className="article-detail-cell">
-                      <strong>{article.detail || '—'}</strong>
+                      <strong>
+                        {article.detail || '—'}
+                      </strong>
 
                       {article.seller && (
                         <small>{article.seller}</small>
-                      )}
-
-                      {article.origin && (
-                        <small>{article.origin}</small>
                       )}
                     </div>
                   </td>
 
                   <td>{article.quantity_purchased}</td>
 
-                  <td>—</td>
+                  <td>{article.sold}</td>
 
                   <td>
                     {formatMoney(article.total_cost_eur)}
@@ -399,12 +428,13 @@ export default function ArchiveArticleActions({
                   </td>
 
                   <td>
-                    <a
-                      href={`/admin/articoli/${article.id}`}
-                      className="table-action"
-                    >
-                      Utenti
-                    </a>
+                    <ArticlePhotoButton
+                      articleId={article.id}
+                      photoUrl={article.photo_url}
+                      onOpen={() =>
+                        setShowPhotoModal(article.photo_url)
+                      }
+                    />
                   </td>
                 </tr>
               ))}
@@ -413,279 +443,320 @@ export default function ArchiveArticleActions({
         </div>
       )}
 
-      <style jsx>{`
-        .section-heading {
-          display: flex;
-          align-items: flex-start;
-          justify-content: space-between;
-          gap: 20px;
-        }
+      {showArrivalModal && (
+        <div className="modal-backdrop">
+          <div className="modal-card">
+            <div className="modal-header">
+              <h2>Registra arrivo</h2>
 
-        .heading-actions {
-          display: flex;
-          align-items: center;
-          justify-content: flex-end;
-          flex-wrap: wrap;
-          gap: 8px;
-        }
+              <button
+                type="button"
+                className="modal-close"
+                onClick={() => setShowArrivalModal(false)}
+              >
+                ×
+              </button>
+            </div>
 
-        .heading-actions form {
-          margin: 0;
-        }
+            <p>
+              Stai registrando l'arrivo di{' '}
+              <strong>{selectedIds.length}</strong> articolo/i.
+            </p>
 
-        .archive-action-button {
-          min-height: 42px;
-          padding: 0 16px;
-          border: 0;
-          border-radius: 9px;
-          background: #70443f;
-          color: #ffffff;
-          font-weight: 700;
-          cursor: pointer;
-          white-space: nowrap;
-        }
+            <form
+              action={async (formData) => {
+                if (!arrivalDate) {
+                  setArrivalError(
+                    'Inserisci la data di arrivo.',
+                  )
+                  return
+                }
 
-        .archive-action-button:disabled {
-          opacity: 0.35;
-          cursor: not-allowed;
-        }
+                setArrivalError('')
 
-        .results-row {
-          display: flex;
-          justify-content: flex-end;
-          margin: 12px 0 18px;
-        }
+                for (const articleId of selectedIds) {
+                  formData.append('article_id', articleId)
+                }
 
-        .results-count {
-          color: #8c7770;
-          font-size: 13px;
-          white-space: nowrap;
-        }
+                formData.set('arrival_date', arrivalDate)
 
-        .selected-operation-panel {
-          display: flex;
-          flex-direction: column;
-          gap: 16px;
-          margin-bottom: 20px;
-          padding: 16px;
-          border: 1px solid #d8c09a;
-          border-radius: 12px;
-          background: #f8f0e4;
-        }
+                await registerArrival(formData)
+              }}
+            >
+              <label htmlFor="arrival-date">
+                Data arrivo
+              </label>
 
-        .selected-operation-panel p {
-          margin: 5px 0 0;
-          color: #806b61;
-          font-size: 13px;
-        }
+              <input
+                id="arrival-date"
+                name="arrival_date"
+                type="date"
+                value={arrivalDate}
+                onChange={(event) =>
+                  setArrivalDate(event.target.value)
+                }
+                required
+              />
 
-        .sale-customer-field {
-          display: flex;
-          flex-direction: column;
-          gap: 6px;
-          max-width: 280px;
-        }
+              {arrivalError && (
+                <p className="error">{arrivalError}</p>
+              )}
 
-        .sale-customer-field label,
-        .sale-line label {
-          color: #70443f;
-          font-size: 12px;
-          font-weight: 700;
-        }
+              <div className="modal-actions">
+                <button
+                  type="button"
+                  className="secondary-button"
+                  onClick={() =>
+                    setShowArrivalModal(false)
+                  }
+                >
+                  Annulla
+                </button>
 
-        .sale-customer-field input,
-        .sale-line input {
-          min-height: 38px;
-          padding: 7px 9px;
-          border: 1px solid #cdbba3;
-          border-radius: 7px;
-          background: #ffffff;
-        }
+                <button
+                  type="submit"
+                  className="archive-action-button"
+                >
+                  Conferma arrivo
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
-        .sale-lines {
-          display: flex;
-          flex-direction: column;
-          gap: 10px;
-        }
+      {showSaleModal && (
+        <div className="modal-backdrop">
+          <div className="modal-card sale-modal-card">
+            <div className="modal-header">
+              <h2>Registra vendita</h2>
 
-        .sale-line {
-          display: grid;
-          grid-template-columns: minmax(0, 1fr) 110px 130px;
-          gap: 12px;
-          align-items: end;
-          padding: 12px;
-          border: 1px solid #e3d8ce;
-          border-radius: 9px;
-          background: #fffdf9;
-        }
+              <button
+                type="button"
+                className="modal-close"
+                onClick={() => setShowSaleModal(false)}
+              >
+                ×
+              </button>
+            </div>
 
-        .sale-line-title {
-          display: flex;
-          flex-direction: column;
-          gap: 4px;
-          min-width: 0;
-        }
+            <div className="sale-customer-field">
+              <label htmlFor="sale-customer-code">
+                Codice cliente
+              </label>
 
-        .sale-line-title strong {
-          color: #70443f;
-        }
+              <input
+                id="sale-customer-code"
+                type="text"
+                value={saleCustomerCode}
+                onChange={(event) =>
+                  setSaleCustomerCode(
+                    event.target.value.toUpperCase(),
+                  )
+                }
+                placeholder="Es. A26"
+              />
+            </div>
 
-        .sale-line-title span {
-          overflow: hidden;
-          color: #8c7770;
-          font-size: 13px;
-          text-overflow: ellipsis;
-          white-space: nowrap;
-        }
+            <div className="sale-total-tools">
+              <label htmlFor="sale-total">
+                Totale vendita complessivo €
+              </label>
 
-        .sale-line label {
-          display: flex;
-          flex-direction: column;
-          gap: 5px;
-        }
+              <div className="sale-total-row">
+                <input
+                  id="sale-total"
+                  type="number"
+                  min="0.01"
+                  step="0.01"
+                  value={saleTotal}
+                  onChange={(event) =>
+                    setSaleTotal(event.target.value)
+                  }
+                  placeholder="0,00"
+                />
 
-        .articles-table-wrapper {
-          width: 100%;
-          overflow-x: auto;
-        }
+                <button
+                  type="button"
+                  className="secondary-button"
+                  onClick={distributeSaleTotal}
+                >
+                  Distribuisci
+                </button>
+              </div>
+            </div>
 
-        .articles-table {
-          width: 100%;
-          min-width: 1040px;
-          border-collapse: collapse;
-          font-size: 13px;
-        }
+            <div className="sale-lines">
+              {selectedArticles.map((article) => {
+                const data = saleData[article.id] || {
+                  quantity: '1',
+                  price: '',
+                }
 
-        .articles-table th {
-          padding: 11px 9px;
-          border-bottom: 2px solid #d8c09a;
-          color: #70443f;
-          font-size: 11px;
-          letter-spacing: 0.4px;
-          text-align: left;
-          white-space: nowrap;
-        }
+                const quantity = toNumber(data.quantity)
+                const price = toNumber(data.price)
+                const lineTotal = quantity * price
 
-        .articles-table td {
-          padding: 12px 9px;
-          border-bottom: 1px solid #eee4da;
-          vertical-align: middle;
-        }
+                return (
+                  <div
+                    key={article.id}
+                    className="sale-line"
+                  >
+                    <div className="sale-line-title">
+                      <strong>
+                        {article.article_code}
+                      </strong>
 
-        .articles-table tbody tr:hover {
-          background: #fff8ef;
-        }
+                      <span>
+                        {article.series || 'Serie non indicata'}
+                      </span>
 
-        .articles-table input[type='checkbox'] {
-          width: 18px;
-          height: 18px;
-          margin: 0;
-          cursor: pointer;
-        }
+                      <span>
+                        {article.detail || 'Senza dettaglio'}
+                      </span>
 
-        .article-code-cell {
-          display: flex;
-          flex-direction: column;
-          align-items: flex-start;
-          gap: 8px;
-          min-width: 90px;
-        }
+                      <small>
+                        Residuo: {article.available}
+                      </small>
 
-        .article-code-actions {
-          display: flex;
-          align-items: center;
-          gap: 10px;
-        }
+                      <small>
+                        Prezzo acquisto unitario:{' '}
+                        {formatMoney(article.unit_cost_eur)}
+                      </small>
+                    </div>
 
-        .article-code-link {
-          color: #70443f;
-          font-weight: 800;
-          text-decoration: none;
-        }
+                    <label>
+                      Quantità
+                      <input
+                        type="number"
+                        min="1"
+                        max={article.available}
+                        step="1"
+                        value={data.quantity}
+                        onChange={(event) =>
+                          updateSaleData(
+                            article.id,
+                            'quantity',
+                            event.target.value,
+                          )
+                        }
+                      />
+                    </label>
 
-        .article-code-link:hover,
-        .table-action:hover {
-          text-decoration: underline;
-        }
+                    <label>
+                      Prezzo unitario €
+                      <input
+                        type="number"
+                        min="0.01"
+                        step="0.01"
+                        value={data.price}
+                        onChange={(event) =>
+                          updateSaleData(
+                            article.id,
+                            'price',
+                            event.target.value,
+                          )
+                        }
+                        placeholder="0,00"
+                      />
+                    </label>
 
-        .article-detail-cell {
-          display: flex;
-          flex-direction: column;
-          gap: 3px;
-          min-width: 160px;
-        }
+                    <div className="sale-line-total">
+                      <span>Totale</span>
+                      <strong>
+                        {formatMoney(lineTotal)}
+                      </strong>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
 
-        .article-detail-cell strong {
-          color: #493532;
-        }
+            {saleError && (
+              <p className="error">{saleError}</p>
+            )}
 
-        .article-detail-cell small {
-          color: #8c7770;
-        }
+            <div className="modal-actions">
+              <button
+                type="button"
+                className="secondary-button"
+                onClick={() => setShowSaleModal(false)}
+              >
+                Annulla
+              </button>
 
-        .article-status {
-          display: inline-flex;
-          padding: 5px 8px;
-          border-radius: 999px;
-          font-size: 10px;
-          font-weight: 800;
-          white-space: nowrap;
-        }
+              <form
+                action={async (formData) => {
+                  if (!saleIsReady) {
+                    setSaleError(
+                      'Controlla cliente, quantità e prezzi.',
+                    )
+                    return
+                  }
 
-        .status-arrivo {
-          background: #fff0c2;
-          color: #8a5a00;
-        }
+                  formData.set(
+                    'customer_code',
+                    saleCustomerCode.trim(),
+                  )
 
-        .status-stock {
-          background: #d9f2df;
-          color: #276749;
-        }
+                  for (const article of selectedArticles) {
+                    const data = saleData[article.id]
 
-        .status-venduto {
-          background: #eadcf8;
-          color: #68408b;
-        }
+                    formData.append(
+                      'sale_article_id',
+                      article.id,
+                    )
 
-        .table-action {
-          color: #70443f;
-          font-weight: 700;
-          text-decoration: none;
-          white-space: nowrap;
-        }
+                    formData.append(
+                      `qty_${article.id}`,
+                      data.quantity,
+                    )
 
-        .empty {
-          padding: 24px 0;
-          color: #8c7770;
-        }
+                    formData.append(
+                      `price_${article.id}`,
+                      data.price,
+                    )
+                  }
 
-        @media (max-width: 900px) {
-          .section-heading {
-            flex-direction: column;
-          }
+                  await registerSale(formData)
+                }}
+              >
+                <button
+                  type="submit"
+                  className="archive-action-button"
+                  disabled={!saleIsReady}
+                >
+                  Conferma vendita
+                </button>
+              </form>
+            </div>
+          </div>
+        </div>
+      )}
 
-          .heading-actions {
-            width: 100%;
-            justify-content: flex-start;
-          }
-        }
+      {showPhotoModal && (
+        <div className="modal-backdrop">
+          <div className="modal-card photo-modal-card">
+            <div className="modal-header">
+              <h2>Immagine articolo</h2>
 
-        @media (max-width: 700px) {
-          .heading-actions {
-            flex-direction: column;
-            align-items: stretch;
-          }
+              <button
+                type="button"
+                className="modal-close"
+                onClick={() => setShowPhotoModal(null)}
+              >
+                ×
+              </button>
+            </div>
 
-          .heading-actions form,
-          .archive-action-button {
-            width: 100%;
-          }
-
-          .sale-line {
-            grid-template-columns: 1fr;
-          }
-        }
-      `}</style>
-    </section>
+            <img
+              src={showPhotoModal}
+              alt="Immagine articolo"
+              className="article-photo-large"
+            />
+          </div>
+        </div>
+      )}
+    </>
   )
 }
