@@ -1,42 +1,38 @@
 'use client'
 
+import { useState } from 'react'
+import ArticlePhotoButton from './ArticlePhotoButton'
+
+type ArticleOption = {
+  id: string
+  article_code: string
+  photo_url: string | null
+  purchase_date: string
+  series: string | null
+  detail: string | null
+  origin: string
+  seller: string | null
+  quantity_purchased: number
+  total_cost_eur: number | null
+  unit_cost_eur: number | null
+  status: string
+  statusLabel: string
+  statusClass: string
+}
+
 type Props = {
-  articleId: string
-  photoUrl: string | null
+  articles: ArticleOption[]
+  registerArrival: (formData: FormData) => Promise<void>
+  registerSale: (formData: FormData) => Promise<void>
 }
 
-export default function ArticlePhotoButton({
-  articleId,
-  photoUrl,
+type SaleData = {
+  quantity: string
+  price: string
+}
+
+export default function ArchiveArticleActions({
+  articles,
+  registerArrival,
+  registerSale,
 }: Props) {
-  const hasPhoto = Boolean(photoUrl?.trim())
-
-  return (
-    <button
-      type="button"
-      className="image-preview-link"
-      title={
-        hasPhoto
-          ? 'Visualizza immagine articolo'
-          : 'Immagine non disponibile'
-      }
-      aria-label={
-        hasPhoto
-          ? `Visualizza immagine articolo ${articleId}`
-          : `Immagine non disponibile per ${articleId}`
-      }
-      disabled={!hasPhoto}
-      onClick={() => {
-        if (!hasPhoto || !photoUrl) return
-
-        window.open(
-          photoUrl,
-          '_blank',
-          'noopener,noreferrer',
-        )
-      }}
-    >
-      🔍
-    </button>
-  )
-}
