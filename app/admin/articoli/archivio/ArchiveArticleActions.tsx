@@ -341,7 +341,10 @@ export default function ArchiveArticleActions({
                           aria-label={`Seleziona ${article.article_code}`}
                         />
 
-                        <ArticlePhotoButton articleId={article.id} />
+                        <ArticlePhotoButton
+  articleId={article.id}
+  photoUrl={article.photo_url}
+/>
                       </div>
                     </div>
                   </td>
@@ -397,7 +400,35 @@ export default function ArchiveArticleActions({
         </div>
       )}
 
-      <style jsx>{`
+      <style jsx>
+        .article-photo-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: #70443f;
+  cursor: pointer;
+}
+
+.article-photo-button svg {
+  width: 18px;
+  height: 18px;
+}
+
+.article-photo-button:disabled {
+  color: #bdb5b0;
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.article-photo-button:not(:disabled):hover {
+  color: #493532;
+}
+        {`
         .section-heading {
           display: flex;
           align-items: flex-start;
