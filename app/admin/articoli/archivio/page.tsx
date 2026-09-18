@@ -1,6 +1,7 @@
 import { redirect } from 'next/navigation'
 import { createClient } from '../../../../lib/supabase-server'
 import ArchiveArticleActions from './ArchiveArticleActions'
+import Navigation from '../../../../components/navigation'
 
 type ArticoliAdminPageProps = {
   searchParams: Promise<{
@@ -54,19 +55,6 @@ function formatDate(value: string | null) {
   }).format(new Date(value))
 }
 
-function money(value: number | null | undefined) {
-  return new Intl.NumberFormat('it-IT', {
-    style: 'currency',
-    currency: 'EUR',
-  }).format(Number(value || 0))
-}
-
-function number(value: number | null | undefined) {
-  return new Intl.NumberFormat('it-IT').format(
-    Number(value || 0),
-  )
-}
-
 function statusLabel(status: ArticleStatus) {
   switch (status) {
     case 'IN_ARRIVO':
@@ -97,71 +85,6 @@ function statusClass(status: ArticleStatus) {
     default:
       return 'article-status'
   }
-}
-
-/*
-|--------------------------------------------------------------------------
-| SIDEBAR
-|--------------------------------------------------------------------------
-*/
-
-function AdminSidebar({
-  displayName,
-  email,
-}: {
-  displayName: string | null
-  email: string | null
-}) {
-  return (
-    <aside className="sidebar">
-      <div className="brand">
-        MangaBEART <span>[ShopaTüT]</span>
-      </div>
-
-      <nav className="admin-navigation">
-        <a href="/admin">
-          Dashboard
-        </a>
-
-        <a href="/admin/clienti">
-          Clienti
-        </a>
-
-        <a href="/admin/caselle">
-          Caselle
-        </a>
-
-        <a
-          href="/admin/articoli"
-          className="active"
-        >
-          Articoli
-        </a>
-
-        <a href="/admin/pagamenti">
-          Pagamenti
-        </a>
-
-        <a href="/admin/crediti">
-          Crediti
-        </a>
-
-        <a href="/admin/spedizioni">
-          Spedizioni
-        </a>
-
-        <a href="/admin/movimenti">
-          Movimenti
-        </a>
-      </nav>
-
-      <div className="side-note">
-        V1 • AMMINISTRATORE
-        <br />
-        {displayName || email || 'Amministratore'}
-      </div>
-    </aside>
-  )
 }
 
 /*
@@ -478,10 +401,10 @@ export default async function ArticoliAdminPage({
   if (articlesResult.error) {
     return (
       <main className="shell">
-        <AdminSidebar
-          displayName={
-            profile?.display_name || null
-          }
+        <Navigation
+          role="AMMINISTRATORE"
+          active="/admin/articoli/archivio"
+          displayName={profile?.display_name || null}
           email={user.email || null}
         />
 
@@ -590,10 +513,10 @@ export default async function ArticoliAdminPage({
 
   return (
     <main className="shell">
-      <AdminSidebar
-        displayName={
-          profile?.display_name || null
-        }
+      <Navigation
+        role="AMMINISTRATORE"
+        active="/admin/articoli/archivio"
+        displayName={profile?.display_name || null}
         email={user.email || null}
       />
 
