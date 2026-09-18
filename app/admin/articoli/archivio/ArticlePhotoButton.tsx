@@ -9,14 +9,12 @@ export default function ArticlePhotoButton({
   articleId,
   photoUrl,
 }: Props) {
-  const hasPhoto =
-    typeof photoUrl === 'string' &&
-    photoUrl.trim().length > 0
+  const hasPhoto = Boolean(photoUrl?.trim())
 
   return (
     <button
       type="button"
-      className="article-photo-button"
+      className="image-preview-link"
       title={
         hasPhoto
           ? 'Visualizza immagine articolo'
@@ -29,7 +27,7 @@ export default function ArticlePhotoButton({
       }
       disabled={!hasPhoto}
       onClick={() => {
-        if (!hasPhoto) return
+        if (!hasPhoto || !photoUrl) return
 
         window.open(
           photoUrl,
@@ -38,28 +36,7 @@ export default function ArticlePhotoButton({
         )
       }}
     >
-      <svg
-        viewBox="0 0 24 24"
-        aria-hidden="true"
-        focusable="false"
-      >
-        <circle
-          cx="10.5"
-          cy="10.5"
-          r="6.5"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="2"
-        />
-
-        <path
-          d="M16 16l5 5"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="2"
-          strokeLinecap="round"
-        />
-      </svg>
+      🔍
     </button>
   )
 }
