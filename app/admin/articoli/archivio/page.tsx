@@ -23,12 +23,12 @@ type ArticleStatus =
 type Article = {
   id: string
   article_code: string
+  photo_url: string | null
   purchase_date: string
   origin: string
   seller: string | null
   series: string | null
   detail: string | null
-  photo_url: string | null
   quantity_purchased: number
   currency: string
   unit_price_foreign: number
@@ -296,6 +296,7 @@ export default async function ArticoliAdminPage({
       `
         id,
         article_code,
+        photo_url,
         purchase_date,
         origin,
         seller,
@@ -482,12 +483,12 @@ export default async function ArticoliAdminPage({
     return {
       id: article.id,
       article_code: article.article_code,
+      photo_url: article.photo_url,
       purchase_date: formatDate(article.purchase_date),
       origin: article.origin,
       seller: article.seller,
       series: article.series,
       detail: article.detail,
-      photo_url: article.photo_url,
       quantity_purchased: purchased,
       total_cost_eur: article.total_cost_eur,
       unit_cost_eur: article.unit_cost_eur,
@@ -563,7 +564,7 @@ export default async function ArticoliAdminPage({
 
             {hasFilters && (
               <a
-                href="/admin/articoli"
+                href="/admin/articoli/archivio"
                 className="filters-reset"
               >
                 Azzera
@@ -572,7 +573,7 @@ export default async function ArticoliAdminPage({
           </div>
 
           <form
-            action="/admin/articoli"
+            action="/admin/articoli/archivio"
             method="get"
             className="filters-form"
           >
