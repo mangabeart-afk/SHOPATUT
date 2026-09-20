@@ -1,2 +1,0 @@
--- Kept as a separate corrective migration in the project history.
--- The final make_customer_code implementation is included in the previous migration.
