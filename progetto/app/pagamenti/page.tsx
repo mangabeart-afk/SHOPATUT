@@ -1,0 +1,127 @@
+import { redirect } from 'next/navigation'
+import { createClient } from '../../lib/supabase-server'
+import Navigation from '../../components/navigation'
+import WhatsAppContact from '../../components/whatsapp-contact'
+
+const money = (n: number) =>
+  new Intl.NumberFormat('it-IT', {
+    style: 'currency',
+    currency: 'EUR',
+  }).format(n || 0)
+
+export default async function PagamentiPage() {
+  const supabase = await createClient()
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+
+  if (!user) redirect('/login')
+
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('role,mailbox_id')
+    .eq('user_id', user.id)
+    .maybeSingle()
+
+  if (profile?.role === 'AMMINISTRATORE') redirect('/admin/pagamenti')
+
+  const mailboxId = profile?.mailbox_id
+
+  const [{ data: payments, error: paymentsError }, { data: balanceMovements, error: balanceError }] =
+    await Promise.all([
+      mailboxId
+        ? supabase
+            .from('payments')
+            .select('id,amount_eur,amount,payment_date,payment_method,status,notes')
+            .eq('mailbox_id', mailboxId)
+            .order('payment_date', { ascending: false })
+        : Promise.resolve({ data: [], error: null }),
+      mailboxId
+        ? supabase
+            .from('movements')
+            .select('total_amount_eur')
+            .eq('mailbox_id', mailboxId)
+        : Promise.resolve({ data: [], error: null }),
+    ])
+
+  if (paymentsError || balanceError) {
+    return (
+      <main className="shell">
+        <Navigation role="CLIENTE" active="/pagamenti" email={user.email} />
+        <section className="content">
+          <header className="topbar">
+            <div>
+              <p className="eyebrow">AREA CLIENTE</p>
+              <h1>Pagamenti</h1>
+            </div>
+            <WhatsAppContact />
+          </header>
+          <section className="panel">
+            <h2>I miei pagamenti</h2>
+            <div className="empty">Impossibile caricare i pagamenti.</div>
+          </section>
+        </section>
+      </main>
+    )
+  }
+
+  const rows = payments || []
+  const balance = (balanceMovements || []).reduce(
+    (sum, movement: any) => sum + Number(movement.total_amount_eur || 0),
+    0
+  )
+
+  return (
+    <main className="shell">
+      <Navigation role="CLIENTE" active="/pagamenti" email={user.email} />
+      <section className="content">
+        <header className="topbar">
+          <div>
+            <p className="eyebrow">AREA CLIENTE</p>
+            <h1>Pagamenti</h1>
+          </div>
+          <WhatsAppContact />
+        </header>
+
+        <div className="grid">
+          <div className="card">
+            <div className="muted">Saldo</div>
+            <strong>{money(balance)}</strong>
+            <small>saldo casella</small>
+          </div>
+
+          <div className="card">
+            <div className="muted">Numero pagamenti</div>
+            <strong>{rows.length}</strong>
+            <small>pagamenti registrati</small>
+          </div>
+        </div>
+
+        <section className="panel">
+          <h2>Storico pagamenti</h2>
+          {rows.length === 0 ? (
+            <div className="empty">Nessun pagamento registrato.</div>
+          ) : (
+            <div className="movement-list">
+              {rows.map((payment: any) => {
+                const amount = Number(payment.amount_eur ?? payment.amount ?? 0)
+                return (
+                  <div className="movement" key={payment.id}>
+                    <div>
+                      <b>Pagamento #{payment.id}</b>
+                      {payment.payment_date && <span>{new Intl.DateTimeFormat('it-IT').format(new Date(payment.payment_date))}</span>}
+                      {payment.payment_method && <span>{payment.payment_method}</span>}
+                      {payment.notes && <span>{payment.notes}</span>}
+                    </div>
+                    <strong>{money(amount)}</strong>
+                  </div>
+                )
+              })}
+            </div>
+          )}
+        </section>
+      </section>
+    </main>
+  )
+}
