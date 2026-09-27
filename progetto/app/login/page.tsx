@@ -21,7 +21,7 @@ function LoginForm() {
   }
 
   return <main className="auth-shell"><section className="auth-card">
-    <div className="auth-logo"><img src="/logo.png" alt="MangaBEART [ShopaTüT]" /></div><h1>Bentornato</h1><p className="muted">Accedi alla tua area personale.</p>
+    <div className="auth-logo"><img src="/logo.png" alt="MangaBEART [ShopaTüT]" /></div><h1>「いらっしゃいませ」</h1><p className="muted">Accedi alla tua area personale.</p>
     <form onSubmit={submit} className="form">
       <label>Email<input type="email" required value={email} onChange={e=>setEmail(e.target.value)} autoComplete="email" /></label>
       <label>Password<input type="password" required value={password} onChange={e=>setPassword(e.target.value)} autoComplete="current-password" /></label>
