@@ -4095,3 +4095,21 @@ html, body { max-width: 100%; overflow-x: hidden; }
   object-fit: cover;
   object-position: center;
 }
+
+/* Aumenta l'altezza del form modifica pagamento */
+.customer-payment-edit-modal {
+  width: min(460px, calc(100vw - 32px));
+  max-height: 90vh;
+  min-height: 650px;
+  padding: 18px;
+  overflow-y: auto;
+}
+
+@media (max-width: 520px) {
+  .customer-payment-edit-modal {
+    width: calc(100vw - 24px);
+    max-height: 92vh;
+    min-height: 620px;
+    padding: 14px;
+  }
+}
