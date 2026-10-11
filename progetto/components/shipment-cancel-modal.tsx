@@ -1,0 +1,6 @@
+'use client'
+import { useState } from 'react'
+export default function ShipmentCancelModal({action,shipmentId,shipmentCode}:{action:(formData:FormData)=>void|Promise<void>;shipmentId:string;shipmentCode:string}){
+ const [open,setOpen]=useState(false)
+ return <><button type="button" className="danger-button" onClick={()=>setOpen(true)}>ANNULLA</button>{open&&<div className="modal-backdrop" role="presentation" onMouseDown={()=>setOpen(false)}><div className="modal-card" role="alertdialog" aria-modal="true" aria-label="Conferma annullamento spedizione" onMouseDown={e=>e.stopPropagation()}><div className="section-heading"><div><p className="eyebrow">ANNULLA SPEDIZIONE</p><h2>{shipmentCode}</h2></div><button type="button" className="modal-close" onClick={()=>setOpen(false)} aria-label="Chiudi">×</button></div><p>Confermi di annullare questa spedizione? Le copie torneranno disponibili per una nuova spedizione.</p><form action={action}><input type="hidden" name="shipment_id" value={shipmentId}/><div className="modal-actions"><button type="button" className="back-button" onClick={()=>setOpen(false)}>Mantieni spedizione</button><button type="submit" className="danger-button">Conferma annullamento</button></div></form></div></div>}</>
+}
