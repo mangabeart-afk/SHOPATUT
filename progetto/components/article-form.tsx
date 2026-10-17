@@ -1,0 +1,369 @@
+'use client'
+
+import { useMemo, useRef, useState } from 'react'
+import CustomerAutocomplete from './customer-autocomplete'
+
+type ArticleFormAction = (formData: FormData) => void | Promise<void>
+
+type CustomerOption = { id: string; customer_code?: string | null; first_name: string; last_name: string; email: string | null }
+
+type ArticleFormProps = {
+  action: ArticleFormAction
+  customers?: CustomerOption[]
+  mode?: 'create' | 'edit'
+  showSaleSection?: boolean
+  returnTo?: 'archive' | 'detail'
+  article?: Partial<{
+    id: string
+    article_code: string
+    purchase_date: string
+    origin: string
+    purchase_source: string | null
+    article_type: string
+    seller: string | null
+    series: string | null
+    detail: string | null
+    quantity_purchased: number
+    currency: string
+    unit_price_foreign: number
+    exchange_rate: number
+    commission_cost: number
+    commission_mode: string
+    commission_percent: number
+    commission_currency: string
+    commission_exchange_rate: number
+    customs_cost: number
+    customs_mode: string
+    customs_percent: number
+    customs_currency: string
+    customs_exchange_rate: number
+    shipping_cost: number
+    shipping_mode: string
+    shipping_percent: number
+    shipping_currency: string
+    shipping_exchange_rate: number
+    notes: string | null
+    photo_url: string | null
+    status: string
+  }>
+}
+
+const currencyOptions = ['JPY', 'USD', 'EUR']
+const articleTypes = ['VARIANT', 'BOOKLET', 'ARTBOOK', 'TANKOBON', 'ALTRO'] as const
+const purchaseSources = [['NEGOZIO', 'Negozio'], ['ONLINE', 'Online'], ['FORNITORE', 'Fornitore'], ['ALTRO', 'Altro']] as const
+const defaultCustomsPercentForType = (type: string) =>
+  ['VARIANT', 'BOOKLET', 'ARTBOOK', 'TANKOBON'].includes(type) ? 4 : 26.7
+
+const defaultExchangeRateForCurrency = (currency: string) => currency === 'JPY' ? 160 : currency === 'USD' ? 1.17 : 1
+
+const defaultCurrencyForOrigin = (origin: string) => {
+  if (origin === 'GIAPPONE') return 'JPY'
+  if (origin === 'VIETNAM') return 'USD'
+  return 'EUR'
+}
+
+export default function ArticleForm({ action, mode = 'create', article, customers = [], showSaleSection = mode === 'create', returnTo = 'detail' }: ArticleFormProps) {
+  const initialOrigin = article?.origin || 'GIAPPONE'
+  const initialType = article?.article_type || 'ALTRO'
+  const initialAccessoryMode: 'FIXED' | 'PERCENT' | 'MIXED' = mode === 'create'
+    ? 'PERCENT'
+    : (['FIXED', 'PERCENT'].includes(article?.commission_mode || '') && article?.commission_mode === article?.customs_mode && article?.customs_mode === article?.shipping_mode
+      ? article!.commission_mode as 'FIXED' | 'PERCENT'
+      : 'MIXED')
+  const [origin, setOrigin] = useState(initialOrigin)
+  const [purchaseSource, setPurchaseSource] = useState(article?.purchase_source || 'ALTRO')
+  const [accessoryMode, setAccessoryMode] = useState<'FIXED' | 'PERCENT' | 'MIXED'>(initialAccessoryMode)
+  const [articleType, setArticleType] = useState(initialType)
+  const [currency, setCurrency] = useState(article?.currency || defaultCurrencyForOrigin(initialOrigin))
+  const [quantity, setQuantity] = useState(Number(article?.quantity_purchased || 1))
+  const [unitPrice, setUnitPrice] = useState(Number(article?.unit_price_foreign || 0))
+  const [exchangeRate, setExchangeRate] = useState(Number(article?.exchange_rate || defaultExchangeRateForCurrency(article?.currency || defaultCurrencyForOrigin(initialOrigin))))
+  const [commissionMode, setCommissionMode] = useState(mode === 'create' ? 'PERCENT' : (article?.commission_mode === 'PERCENT' || (Number(article?.commission_percent || 0) > 0 && Number(article?.commission_cost || 0) === 0) ? 'PERCENT' : (article?.commission_mode || 'FIXED')))
+  const [commission, setCommission] = useState(Number(article?.commission_cost || 0))
+  const [commissionPercent, setCommissionPercent] = useState(Number(article?.commission_percent || 0))
+  const [commissionCurrency, setCommissionCurrency] = useState(article?.commission_currency || currency)
+  const [commissionRate, setCommissionRate] = useState(Number(article?.commission_exchange_rate || 1))
+  const [customsMode, setCustomsMode] = useState(mode === 'create' ? 'PERCENT' : (article?.customs_mode === 'PERCENT' || (Number(article?.customs_percent || 0) > 0 && Number(article?.customs_cost || 0) === 0) ? 'PERCENT' : (article?.customs_mode || 'PERCENT')))
+  const [customs, setCustoms] = useState(Number(article?.customs_cost || 0))
+  const [customsPercent, setCustomsPercent] = useState(Number(article?.customs_percent ?? defaultCustomsPercentForType(initialType)))
+  const [customsCurrency, setCustomsCurrency] = useState(article?.customs_currency || currency)
+  const [customsRate, setCustomsRate] = useState(Number(article?.customs_exchange_rate || 1))
+  const [shippingMode, setShippingMode] = useState(mode === 'create' ? 'PERCENT' : (article?.shipping_mode === 'PERCENT' || (Number(article?.shipping_percent || 0) > 0 && Number(article?.shipping_cost || 0) === 0) ? 'PERCENT' : (article?.shipping_mode || 'FIXED')))
+  const [shipping, setShipping] = useState(Number(article?.shipping_cost || 0))
+  const [shippingPercent, setShippingPercent] = useState(Number(article?.shipping_percent || 0))
+  const [shippingCurrency, setShippingCurrency] = useState(article?.shipping_currency || currency)
+  const [shippingRate, setShippingRate] = useState(Number(article?.shipping_exchange_rate || 1))
+  const [saleEnabled, setSaleEnabled] = useState(false)
+  const [saleQuantity, setSaleQuantity] = useState(1)
+  const [salePrice, setSalePrice] = useState(0)
+  const [photoError, setPhotoError] = useState('')
+  const photoInputRef = useRef<HTMLInputElement | null>(null)
+
+  const toEur = (amount: number, selectedCurrency: string, rate: number) => {
+    if (!amount) return 0
+    if (selectedCurrency === 'EUR') return amount
+    return amount / (rate || 1)
+  }
+
+  const purchaseBaseEur = useMemo(() =>
+    toEur(unitPrice * quantity, currency, exchangeRate),
+    [unitPrice, quantity, currency, exchangeRate]
+  )
+
+  const accessoryEur = (mode: string, amount: number, percent: number, selectedCurrency: string, rate: number) =>
+    mode === 'PERCENT'
+      ? purchaseBaseEur * Math.max(0, percent) / 100
+      : toEur(amount, selectedCurrency, rate)
+
+  const purchaseTotalEur = useMemo(() => {
+    const commissionEur = accessoryEur(commissionMode, commission, commissionPercent, commissionCurrency, commissionRate)
+    const customsEur = accessoryEur(customsMode, customs, customsPercent, customsCurrency, customsRate)
+    const shippingEur = accessoryEur(shippingMode, shipping, shippingPercent, shippingCurrency, shippingRate)
+    return purchaseBaseEur + commissionEur + customsEur + shippingEur
+  }, [purchaseBaseEur, commissionMode, commission, commissionPercent, commissionCurrency, commissionRate, customsMode, customs, customsPercent, customsCurrency, customsRate, shippingMode, shipping, shippingPercent, shippingCurrency, shippingRate])
+
+  const unitCostEur = quantity > 0 ? purchaseTotalEur / quantity : 0
+  const saleTotal = saleQuantity * salePrice
+
+  const changeOrigin = (value: string) => {
+    setOrigin(value)
+    const nextCurrency = defaultCurrencyForOrigin(value)
+    setCurrency(nextCurrency)
+    if (!article) {
+      const nextRate = defaultExchangeRateForCurrency(nextCurrency)
+      setExchangeRate(nextRate)
+      if (accessoryMode === 'FIXED') {
+        setCommissionCurrency('EUR'); setCustomsCurrency('EUR'); setShippingCurrency('EUR')
+        setCommissionRate(1); setCustomsRate(1); setShippingRate(1)
+      } else {
+        setCommissionCurrency(nextCurrency); setCustomsCurrency(nextCurrency); setShippingCurrency(nextCurrency)
+        setCommissionRate(nextRate); setCustomsRate(nextRate); setShippingRate(nextRate)
+      }
+    }
+  }
+
+  const changeArticleType = (value: string) => {
+    setArticleType(value)
+    setCustomsPercent(defaultCustomsPercentForType(value))
+    if (mode === 'create') {
+      if (accessoryMode === 'PERCENT') setCustomsMode('PERCENT')
+      return
+    }
+    setCustomsMode('PERCENT')
+  }
+
+  const changeAccessoryMode = (value: 'FIXED' | 'PERCENT') => {
+    setAccessoryMode(value)
+    setCommissionMode(value)
+    setCustomsMode(value)
+    setShippingMode(value)
+    setCommission(0); setCustoms(0); setShipping(0)
+    if (value === 'FIXED') {
+      setCommissionPercent(0); setCustomsPercent(0); setShippingPercent(0)
+      setCommissionCurrency('EUR'); setCustomsCurrency('EUR'); setShippingCurrency('EUR')
+      setCommissionRate(1); setCustomsRate(1); setShippingRate(1)
+    } else {
+      setCommissionPercent(0); setCustomsPercent(defaultCustomsPercentForType(articleType)); setShippingPercent(0)
+    }
+  }
+
+  const changePurchaseCurrency = (value: string) => {
+    setCurrency(value)
+    if (mode === 'create') {
+      const nextRate = defaultExchangeRateForCurrency(value)
+      setExchangeRate(nextRate)
+      if (accessoryMode === 'FIXED') {
+        setCommissionCurrency('EUR'); setCustomsCurrency('EUR'); setShippingCurrency('EUR')
+        setCommissionRate(1); setCustomsRate(1); setShippingRate(1)
+      } else {
+        setCommissionCurrency(value); setCustomsCurrency(value); setShippingCurrency(value)
+        setCommissionRate(nextRate); setCustomsRate(nextRate); setShippingRate(nextRate)
+      }
+    }
+  }
+
+  return (
+    <form
+      action={action}
+      className="article-create-form"
+      encType="multipart/form-data"
+      onSubmit={(event) => {
+        const file = photoInputRef.current?.files?.[0]
+        if (file && file.size > 8 * 1024 * 1024) {
+          event.preventDefault()
+          setPhotoError(`La foto selezionata supera il limite di 8 MB.\n\nDimensione file: ${(file.size / (1024 * 1024)).toFixed(2)} MB.`)
+          return
+        }
+        setPhotoError('')
+      }}
+    >
+      {mode === 'edit' && article?.id && <input type="hidden" name="id" value={article.id} />}
+      {mode === 'edit' && <input type="hidden" name="return_to" value={returnTo} />}
+
+      <section className="article-form-section article-origin-first">
+        <h3>1. Origine geografica</h3>
+        <p className="muted">Scegli l’area di origine; la valuta di acquisto viene proposta automaticamente.</p>
+        <div className="origin-choice-grid">
+          {[
+            ['GIAPPONE', '🇯🇵 JAP', 'JPY'],
+            ['VIETNAM', '🇻🇳 VIET', 'USD'],
+            ['EUROPA', '🇪🇺 EU', 'EUR'],
+            ['ALTRO', '🌐 ALTRO', 'EUR'],
+          ].map(([value, label, cur]) => (
+            <label key={value} className={`origin-choice ${origin === value ? 'selected' : ''}`}>
+              <input type="radio" name="origin" value={value} checked={origin === value} onChange={() => changeOrigin(value)} />
+              <strong>{label}</strong>
+              <small>{cur}</small>
+            </label>
+          ))}
+        </div>
+      </section>
+
+      <section className="article-form-section article-source-section">
+        <h3>Provenienza articolo</h3>
+        <div className="purchase-source-grid">
+          {purchaseSources.map(([value, label]) => (
+            <label key={value} className={`purchase-source-choice ${purchaseSource === value ? 'selected' : ''}`}>
+              <input type="radio" name="purchase_source" value={value} checked={purchaseSource === value} onChange={() => setPurchaseSource(value)} />
+              <span>{label}</span>
+            </label>
+          ))}
+        </div>
+      </section>
+
+      <div className="form-grid">
+        <label>Data acquisto<input type="date" name="purchase_date" defaultValue={article?.purchase_date?.slice(0, 10) || new Date().toISOString().slice(0, 10)} required /></label>
+        <label>Venditore<input type="text" name="seller" defaultValue={article?.seller || ''} /></label>
+        <label>Serie<input type="text" name="series" defaultValue={article?.series || ''} /></label>
+        <label>Descrizione<input type="text" name="detail" defaultValue={article?.detail || ''} /></label>
+        <label>Tipo<select name="article_type" value={articleType} onChange={(e) => changeArticleType(e.target.value)}>{articleTypes.map((type) => <option key={type} value={type}>{type}</option>)}</select></label>
+        <label>Quantità acquistata<input type="number" name="quantity_purchased" min="1" step="0.00000001" value={quantity} onChange={(e) => setQuantity(Number(e.target.value) || 0)} required /></label>
+        <label>Valuta acquisto<select name="currency" value={currency} onChange={(e) => changePurchaseCurrency(e.target.value)}>{currencyOptions.map((c) => <option key={c} value={c}>{c}</option>)}</select></label>
+        <label>Prezzo unitario<input type="number" name="unit_price_foreign" min="0" step="0.01" value={unitPrice} onChange={(e) => setUnitPrice(Number(e.target.value) || 0)} required /></label>
+        <label>Cambio (1 EUR = {currency})<input type="number" name="exchange_rate" min="0.00000001" step="0.00000001" value={exchangeRate} onChange={(e) => setExchangeRate(Number(e.target.value) || 0)} disabled={currency === 'EUR'} required /></label>
+      </div>
+
+      <section className="article-form-section">
+        <h3>2. Costi accessori</h3>
+        <p className="muted">Scegli una modalità unica per inserire dogana, spedizione e altri costi. Le percentuali si applicano al valore d'acquisto iniziale in euro.</p>
+        {mode === 'create' ? (
+          <>
+            <div className="accessory-mode-toggle" role="group" aria-label="Modalità costi accessori">
+              <button type="button" className={accessoryMode === 'PERCENT' ? 'selected' : ''} aria-pressed={accessoryMode === 'PERCENT'} onClick={() => changeAccessoryMode('PERCENT')}>Percentuale (%)</button>
+              <button type="button" className={accessoryMode === 'FIXED' ? 'selected' : ''} aria-pressed={accessoryMode === 'FIXED'} onClick={() => changeAccessoryMode('FIXED')}>Importo (€)</button>
+            </div>
+            <input type="hidden" name="commission_mode" value={accessoryMode === 'MIXED' ? 'PERCENT' : accessoryMode} />
+            <input type="hidden" name="customs_mode" value={accessoryMode === 'MIXED' ? 'PERCENT' : accessoryMode} />
+            <input type="hidden" name="shipping_mode" value={accessoryMode === 'MIXED' ? 'PERCENT' : accessoryMode} />
+            <input type="hidden" name="commission_currency" value="EUR" />
+            <input type="hidden" name="customs_currency" value="EUR" />
+            <input type="hidden" name="shipping_currency" value="EUR" />
+            <input type="hidden" name="commission_exchange_rate" value="1" />
+            <input type="hidden" name="customs_exchange_rate" value="1" />
+            <input type="hidden" name="shipping_exchange_rate" value="1" />
+            <div className="accessory-compact-grid">
+              {accessoryMode === 'FIXED' ? (
+                <>
+                  <label>Dogana (€)<input type="number" name="customs_cost" min="0" step="0.01" value={customs} onChange={(e) => setCustoms(Number(e.target.value) || 0)} /></label>
+                  <label>Spedizione (€)<input type="number" name="shipping_cost" min="0" step="0.01" value={shipping} onChange={(e) => setShipping(Number(e.target.value) || 0)} /></label>
+                  <label>Altro costo (€)<input type="number" name="commission_cost" min="0" step="0.01" value={commission} onChange={(e) => setCommission(Number(e.target.value) || 0)} /></label>
+                  <input type="hidden" name="customs_percent" value="0" />
+                  <input type="hidden" name="shipping_percent" value="0" />
+                  <input type="hidden" name="commission_percent" value="0" />
+                </>
+              ) : (
+                <>
+                  <label>Dogana (%)<input type="number" name="customs_percent" min="0" step="0.01" value={customsPercent} onChange={(e) => setCustomsPercent(Number(e.target.value) || 0)} /></label>
+                  <label>Spedizione (%)<input type="number" name="shipping_percent" min="0" step="0.01" value={shippingPercent} onChange={(e) => setShippingPercent(Number(e.target.value) || 0)} /></label>
+                  <label>Altro costo (%)<input type="number" name="commission_percent" min="0" step="0.01" value={commissionPercent} onChange={(e) => setCommissionPercent(Number(e.target.value) || 0)} /></label>
+                  <input type="hidden" name="customs_cost" value="0" />
+                  <input type="hidden" name="shipping_cost" value="0" />
+                  <input type="hidden" name="commission_cost" value="0" />
+                </>
+              )}
+            </div>
+          </>
+        ) : (
+          <div className="accessory-grid">
+            <div className="accessory-row">
+              <label>Commissioni modalità<select name="commission_mode" value={commissionMode} onChange={(e) => setCommissionMode(e.target.value)}><option value="FIXED">Importo + valuta</option><option value="PERCENT">Percentuale %</option></select></label>
+              {commissionMode === 'PERCENT' ? (
+                <label>Commissioni %<input type="number" name="commission_percent" min="0" step="0.01" value={commissionPercent} onChange={(e) => setCommissionPercent(Number(e.target.value) || 0)} placeholder="0,00" /></label>
+              ) : (
+                <>
+                  <label>Commissioni<input type="number" name="commission_cost" min="0" step="0.01" value={commission} onChange={(e) => setCommission(Number(e.target.value) || 0)} /></label>
+                  <label>Valuta<select name="commission_currency" value={commissionCurrency} onChange={(e) => setCommissionCurrency(e.target.value)}>{currencyOptions.map((c) => <option key={c} value={c}>{c}</option>)}</select></label>
+                  <label>Cambio (1 EUR = {commissionCurrency})<input type="number" name="commission_exchange_rate" min="0.00000001" step="0.00000001" value={commissionCurrency === 'EUR' ? 1 : commissionRate} onChange={(e) => setCommissionRate(Number(e.target.value) || 0)} disabled={commissionCurrency === 'EUR'} /></label>
+                </>
+              )}
+            </div>
+            <div className="accessory-row">
+              <label>Dogana modalità<select name="customs_mode" value={customsMode} onChange={(e) => setCustomsMode(e.target.value)}><option value="FIXED">Importo + valuta</option><option value="PERCENT">Percentuale %</option></select></label>
+              {customsMode === 'PERCENT' ? (
+                <label>Dogana %<input type="number" name="customs_percent" min="0" step="0.01" value={customsPercent} onChange={(e) => setCustomsPercent(Number(e.target.value) || 0)} placeholder="0,00" /></label>
+              ) : (
+                <>
+                  <label>Dogana<input type="number" name="customs_cost" min="0" step="0.01" value={customs} onChange={(e) => setCustoms(Number(e.target.value) || 0)} /></label>
+                  <label>Valuta<select name="customs_currency" value={customsCurrency} onChange={(e) => setCustomsCurrency(e.target.value)}>{currencyOptions.map((c) => <option key={c} value={c}>{c}</option>)}</select></label>
+                  <label>Cambio (1 EUR = {customsCurrency})<input type="number" name="customs_exchange_rate" min="0.00000001" step="0.00000001" value={customsCurrency === 'EUR' ? 1 : customsRate} onChange={(e) => setCustomsRate(Number(e.target.value) || 0)} disabled={customsCurrency === 'EUR'} /></label>
+                </>
+              )}
+            </div>
+            <div className="accessory-row">
+              <label>Spedizione modalità<select name="shipping_mode" value={shippingMode} onChange={(e) => setShippingMode(e.target.value)}><option value="FIXED">Importo + valuta</option><option value="PERCENT">Percentuale %</option></select></label>
+              {shippingMode === 'PERCENT' ? (
+                <label>Spedizione %<input type="number" name="shipping_percent" min="0" step="0.01" value={shippingPercent} onChange={(e) => setShippingPercent(Number(e.target.value) || 0)} placeholder="0,00" /></label>
+              ) : (
+                <>
+                  <label>Spedizione<input type="number" name="shipping_cost" min="0" step="0.01" value={shipping} onChange={(e) => setShipping(Number(e.target.value) || 0)} /></label>
+                  <label>Valuta<select name="shipping_currency" value={shippingCurrency} onChange={(e) => setShippingCurrency(e.target.value)}>{currencyOptions.map((c) => <option key={c} value={c}>{c}</option>)}</select></label>
+                  <label>Cambio (1 EUR = {shippingCurrency})<input type="number" name="shipping_exchange_rate" min="0.00000001" step="0.00000001" value={shippingCurrency === 'EUR' ? 1 : shippingRate} onChange={(e) => setShippingRate(Number(e.target.value) || 0)} disabled={shippingCurrency === 'EUR'} /></label>
+                </>
+              )}
+            </div>
+          </div>
+        )}
+      </section>
+
+      <section className="article-cost-summary">
+        <div><span>Totale acquisto in EUR</span><strong>€ {purchaseTotalEur.toFixed(2)}</strong></div>
+        <div><span>Costo unitario EUR</span><strong>€ {unitCostEur.toFixed(2)}</strong></div>
+      </section>
+
+      <section className="article-form-section">
+        <h3>3. Foto articolo</h3>
+        <label>Carica foto<input ref={photoInputRef} type="file" name="photo" accept="image/*" /></label>
+        {photoError && (
+          <div className="modal-overlay" role="presentation">
+            <div className="modal-card" role="alertdialog" aria-modal="true" aria-labelledby="photo-size-error-title">
+              <h3 id="photo-size-error-title">Foto troppo grande</h3>
+              <p style={{ whiteSpace: 'pre-line' }}>{photoError}</p>
+              <button type="button" onClick={() => { setPhotoError(''); photoInputRef.current?.focus() }}>OK</button>
+            </div>
+          </div>
+        )}
+        <label>Nuova immagine tramite link<input type="url" name="photo_url" defaultValue={article?.photo_url || ''} placeholder="https://.../immagine.jpg" /></label>
+      </section>
+
+      {showSaleSection && <section className="article-form-section">
+        <h3>4. Vendita contestuale</h3>
+        <label className="checkbox-field"><input type="checkbox" name="sale_enabled" checked={saleEnabled} onChange={(e) => setSaleEnabled(e.target.checked)} /> Registra anche la vendita al salvataggio</label>
+        {saleEnabled && (
+          <div className="sale-inline-grid">
+            <label>ID cliente<CustomerAutocomplete name="sale_customer_code" required placeholder="Nome, cognome o codice utente" options={customers.map((customer) => ({ id: customer.id, code: customer.customer_code?.trim() || '', name: `${customer.first_name} ${customer.last_name}`.trim(), email: customer.email }))} /></label>
+            <label>Quantità venduta<input type="number" name="sale_quantity" min="1" max={quantity} value={saleQuantity} onChange={(e) => setSaleQuantity(Math.min(quantity, Number(e.target.value) || 1))} /></label>
+            <label>Prezzo vendita unitario EUR<input type="number" name="sale_price" min="0.01" step="0.01" value={salePrice} onChange={(e) => setSalePrice(Number(e.target.value) || 0)} /></label>
+            <div className="sale-total-preview"><span>Totale vendita</span><strong>€ {saleTotal.toFixed(2)}</strong></div>
+          </div>
+        )}
+      </section>}
+
+      <div className="form-grid">
+        <label>Stato<select name="status" defaultValue={article?.status || 'IN_ARRIVO'}><option value="IN_ARRIVO">IN ARRIVO</option><option value="IN_STOCK">IN STOCK</option><option value="VENDUTO">VENDUTO</option></select></label>
+        <label className="form-grid-wide">Note<textarea name="notes" rows={3} defaultValue={article?.notes || ''} /></label>
+      </div>
+
+      <button type="submit">{mode === 'edit' ? 'Salva modifiche' : 'Registra articolo'}</button>
+    </form>
+  )
+}
