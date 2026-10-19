@@ -722,7 +722,7 @@ export default async function ArticoliAdminPage({
       name: mailbox.customerName || '',
       quantity: 0,
       total: 0,
-      statuses: [],
+      statuses: [] as string[],
     }
     existing.quantity += Number(row.quantity_assigned || 0)
     if (row.status && !existing.statuses.includes(row.status)) existing.statuses.push(row.status)
@@ -744,7 +744,7 @@ export default async function ArticoliAdminPage({
       name: displayName,
       quantity: 0,
       total: 0,
-      statuses: [],
+      statuses: [] as string[],
       isGeneric: true,
     }
     existing.quantity += Math.max(0, Number(sale.quantity || 0))
