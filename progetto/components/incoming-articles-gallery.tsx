@@ -6,7 +6,6 @@ import ModalPortal from './modal-portal'
 
 type IncomingArticle = {
   id: string
-  article_code: string
   series: string | null
   detail: string | null
   photo_url: string | null
@@ -17,6 +16,7 @@ type IncomingArticle = {
 export default function IncomingArticlesGallery({ articles }: { articles: IncomingArticle[] }) {
   const [failedIds, setFailedIds] = useState<Set<string>>(new Set())
   const [selected, setSelected] = useState<IncomingArticle | null>(null)
+  const articleLabel = (article: IncomingArticle) => [article.series, article.detail].filter(Boolean).join(' · ') || 'articolo'
 
   const visibleArticles = articles
     .filter((article) => Boolean(article.photo_url) && !failedIds.has(article.id))
@@ -48,12 +48,12 @@ export default function IncomingArticlesGallery({ articles }: { articles: Incomi
               type="button"
               className="incoming-photo"
               title="Apri anteprima"
-              aria-label={`Apri anteprima ${article.article_code}`}
+              aria-label={`Apri anteprima ${articleLabel(article)}`}
               onClick={() => setSelected(article)}
             >
               <img
                 src={article.photo_url || ''}
-                alt={article.detail || article.series || article.article_code}
+                alt={article.detail || article.series || 'Foto articolo'}
                 loading={index === 0 ? 'eager' : 'lazy'}
                 decoding="async"
                 fetchPriority={index === 0 ? 'high' : 'auto'}
@@ -67,13 +67,10 @@ export default function IncomingArticlesGallery({ articles }: { articles: Incomi
               />
             </button>
 
-            <div className="incoming-info" title={`${article.article_code}${article.origin ? ` · ${article.origin}` : ''}${article.series ? ` · ${article.series}` : ''}${article.detail ? ` · ${article.detail}` : ''}`}>
-              <strong className="incoming-code-origin">
-                <span className="incoming-code">{article.article_code}</span>
-                <span className="incoming-origin">{article.origin ? <OriginLabel value={article.origin} /> : ''}</span>
-              </strong>
-              <span className="incoming-series" title={article.series || ''}>{article.series || ''}</span>
-              <span className="incoming-detail" title={article.detail || ''}>{article.detail || ''}</span>
+            <div className="incoming-info" title={[article.origin, article.series, article.detail].filter(Boolean).join(' · ')}>
+              {article.origin && <span className="incoming-origin"><OriginLabel value={article.origin} /></span>}
+              {article.series && <span className="incoming-series" title={article.series}>{article.series}</span>}
+              {article.detail && <span className="incoming-detail" title={article.detail}>{article.detail}</span>}
             </div>
           </article>
         ))}
@@ -89,7 +86,7 @@ export default function IncomingArticlesGallery({ articles }: { articles: Incomi
             className="incoming-modal"
             role="dialog"
             aria-modal="true"
-            aria-label={`Anteprima ${selected.article_code}`}
+            aria-label={`Anteprima ${articleLabel(selected)}`}
             onMouseDown={(event) => event.stopPropagation()}
           >
             <button
@@ -102,12 +99,11 @@ export default function IncomingArticlesGallery({ articles }: { articles: Incomi
             </button>
             <img
               src={selected.photo_url}
-              alt={selected.detail || selected.series || selected.article_code}
+              alt={selected.detail || selected.series || 'Foto articolo'}
             />
             <div className="incoming-modal-caption">
-              <strong>{selected.article_code}</strong>
               {selected.origin && <span><OriginLabel value={selected.origin} /></span>}
-              {selected.series && <span>{selected.series}</span>}
+              {selected.series && <strong>{selected.series}</strong>}
               {selected.detail && <span>{selected.detail}</span>}
             </div>
           </div>

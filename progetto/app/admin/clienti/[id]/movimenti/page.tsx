@@ -1,6 +1,19 @@
-import { notFound, redirect } from 'next/navigation'
-import { createClient } from '../../../../../lib/supabase-server'
-import Navigation from '../../../../../components/navigation'
-const money=(v:number)=>new Intl.NumberFormat('it-IT',{style:'currency',currency:'EUR'}).format(v||0)
-const date=(v:string|null)=>v?new Intl.DateTimeFormat('it-IT',{day:'2-digit',month:'2-digit',year: '2-digit',hour:'2-digit',minute:'2-digit'}).format(new Date(v)):'—'
-export default async function CustomerMovements({params}:{params:Promise<{id:string}>}){const {id}=await params;const supabase=await createClient();const {data:{user}}=await supabase.auth.getUser();if(!user)redirect('/login');const {data:profile}=await supabase.from('profiles').select('role,display_name').eq('user_id',user.id).maybeSingle();if(profile?.role!=='AMMINISTRATORE')redirect('/dashboard');const {data:customer}=await supabase.from('customers').select('customer_code,first_name,last_name').eq('id',id).maybeSingle();if(!customer)notFound();const {data:mailbox}=await supabase.from('mailboxes').select('id').eq('customer_id',id).maybeSingle();if(!mailbox)notFound();const {data:movements}=await supabase.from('movements').select('movement_code,movement_at,movement_type,reference_code,quantity,total_amount_eur,description,notes').eq('mailbox_id',mailbox.id).order('movement_at',{ascending:false});return <main className="shell"><Navigation role="AMMINISTRATORE" active="/admin/clienti" displayName={profile?.display_name} email={user.email}/><section className="content"><header className="topbar"><div><p className="eyebrow">UTENTE · {customer.customer_code || '—'}</p><h1>Movimenti di {customer.first_name} {customer.last_name}</h1></div><a className="back-button" href={`/admin/clienti/${id}`}>← Scheda utente</a></header><section className="panel"><h2>Movimenti</h2>{(movements||[]).length===0?<div className="empty">Nessun movimento.</div>:<div className="movement-list movement-list-compact">{(movements||[]).map((m:any)=><div className="movement" key={m.movement_code}><div><b>{m.movement_code}</b><span>{date(m.movement_at)} · {m.movement_type}</span>{m.reference_code&&<span>Riferimento: {m.reference_code}</span>}{m.description&&<span>{m.description}</span>}{m.notes&&<span>Note: {m.notes}</span>}{m.quantity!=null&&<span>Quantità: {m.quantity}</span>}</div><strong>{m.total_amount_eur==null?'—':money(Number(m.total_amount_eur))}</strong></div>)}</div>}</section></section></main>}
+import { notFound } from 'next/navigation'
+import AdminWorkbookLayout from '../../../../../components/admin-workbook-layout'
+import ReadOnlyTable from '../../../../../components/read-only-table'
+import { findSheet, parseCustomerSheet, getLatestExcelWorkbook, dateLabel, money } from '../../../../../lib/excel-source'
+import { requirePageContext } from '../../../../../lib/page-context'
+
+export const dynamic = 'force-dynamic'
+export const revalidate = 0
+export default async function CustomerMovementsPage({ params }: { params: Promise<{ id: string }> }) {
+  const { user, profile, supabase } = await requirePageContext('AMMINISTRATORE')
+  const { id } = await params
+  const workbook = await getLatestExcelWorkbook()
+  let sheet = findSheet(workbook, decodeURIComponent(id))
+  if (!sheet && /^[0-9a-f-]{36}$/i.test(id)) { const { data } = await supabase.from('customers').select('customer_code').eq('id', id).maybeSingle(); if (data?.customer_code) sheet = findSheet(workbook, data.customer_code) }
+  if (!sheet) notFound()
+  const customer = parseCustomerSheet(sheet)
+  const rows = customer.transactions.map((item) => ({ id: item.id, date: dateLabel(item.date), movement: item.movement || '—', article: item.article || '—', quantity: item.quantity ? String(item.quantity) : '—', amount: item.amount != null ? money(item.amount) : '—', paid: item.amountPaid != null ? money(item.amountPaid) : '—', status: item.status || '—' }))
+  return <AdminWorkbookLayout active="/admin/clienti" title={`Movimenti · ${customer.name}`} description={`Scheda Excel ${customer.code}`} displayName={profile.display_name} email={user.email}><section className="panel"><ReadOnlyTable columns={[{key:'date',label:'Data'},{key:'movement',label:'Movimento'},{key:'article',label:'Articolo'},{key:'quantity',label:'Q.tà',align:'right'},{key:'amount',label:'Importo',align:'right'},{key:'paid',label:'Pagato',align:'right'},{key:'status',label:'Stato'}]} rows={rows} /></section></AdminWorkbookLayout>
+}

@@ -1,13 +1,23 @@
 'use client'
 
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import ModalPortal from './modal-portal'
+import ViewportConfirmDialog from './viewport-confirm-dialog'
 
 type Payment = { id: string; payment_code: string; payment_date: string; amount_eur: number | null; payment_method: string | null; notes: string | null; status: string }
 type Props = { action: (formData: FormData) => void | Promise<void>; deleteAction: (formData: FormData) => void | Promise<void>; payment: Payment }
 
 export default function AdminPaymentEditModal({ action, deleteAction, payment }: Props) {
   const [open, setOpen] = useState(false)
+  const [confirmDelete, setConfirmDelete] = useState(false)
+  const deleteButtonRef = useRef<HTMLButtonElement | null>(null)
+
+  const submitDelete = () => {
+    const submitter = deleteButtonRef.current
+    setConfirmDelete(false)
+    if (submitter?.form) submitter.form.requestSubmit(submitter)
+  }
+
   return <>
     <button type="button" className="table-action" onClick={() => setOpen(true)}>Modifica</button>
     {open && <ModalPortal><div className="modal-backdrop" role="presentation" onMouseDown={() => setOpen(false)}>
@@ -19,9 +29,23 @@ export default function AdminPaymentEditModal({ action, deleteAction, payment }:
           <label>Data<input type="date" name="payment_date" defaultValue={payment.payment_date} required/></label>
           <label className="form-grid-full">Metodo<input name="payment_method" defaultValue={payment.payment_method || ''}/></label>
           <label className="form-grid-full">Note<textarea name="notes" rows={3} defaultValue={payment.notes || ''}/></label>
-          <div className="modal-actions"><button type="button" className="back-button" onClick={() => setOpen(false)}>Annulla</button><button type="submit" className="primary-button">Salva modifiche</button><button type="submit" formAction={deleteAction} className="danger-button" onClick={event => { if (!window.confirm(`Cancellare il pagamento ${payment.payment_code}? L'eventuale assegnazione verrà annullata.`)) event.preventDefault() }}>Elimina</button></div>
+          <div className="modal-actions">
+            <button type="button" className="back-button" onClick={() => setOpen(false)}>Annulla</button>
+            <button type="submit" className="primary-button">Salva modifiche</button>
+            <button ref={deleteButtonRef} type="submit" formAction={deleteAction} className="danger-button" onClick={event => { event.preventDefault(); setConfirmDelete(true) }}>Elimina</button>
+          </div>
         </form>
       </div>
     </div></ModalPortal>}
+    {confirmDelete && (
+      <ViewportConfirmDialog
+        title="Conferma eliminazione pagamento"
+        message={`Cancellare il pagamento ${payment.payment_code}? L'eventuale assegnazione verrà annullata.`}
+        confirmLabel="Elimina pagamento"
+        destructive
+        onCancel={() => setConfirmDelete(false)}
+        onConfirm={submitDelete}
+      />
+    )}
   </>
 }

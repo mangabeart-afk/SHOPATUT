@@ -1,3 +1,31 @@
+## Aggiornamento v101 — lettura dal workbook Excel (23/10/2026)
+
+Questa copia introduce una modalità di consultazione **read-only** per le sezioni gestionali. I dati operativi mostrati nelle pagine provengono dall'ultimo snapshot `READY` in `public.excel_sync_runs` / `public.excel_sync_sheets`, con `capture_schema_version = 2`, e non vengono più ricavati dai vecchi record di articoli, movimenti e pagamenti.
+
+- Dashboard amministratore: riepilogo numerico del foglio `W`.
+- Archivio articoli: fogli `X`, `Y`, `Z`, `VIET`; consultazione immagini dai relativi URL presenti nel workbook.
+- Area utente e schede amministrative: schede individuali, saldo e stati letti dal foglio con codice utente; il riempimento giallo `FFFFFF00` sullo stato `IN STOCK` viene interpretato come `IN BOX`.
+- PREORDER: pagina di consultazione dedicata al layout orizzontale del foglio.
+- Inserimento, modifica, cancellazione, registrazione di vendita/pagamento/spedizione e sincronizzazione foto dal sito sono disattivati nelle schermate modificate. La pagina `I miei dettagli` conserva la modifica dell'indirizzo di spedizione; le operazioni di autenticazione e le preferenze delle notifiche push non sono dati gestionali.
+- `supabase/SECURITY-READONLY-TO-REVIEW.sql` è un piano di hardening da verificare e applicare separatamente. **Non è stato applicato al database live**.
+
+### Configurazione necessaria
+
+Oltre alle variabili già usate per autenticazione (`NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`), il runtime server deve avere `SUPABASE_SERVICE_ROLE_KEY` configurata come variabile **server-only** in Vercel. Non aggiungere questa chiave al client, non anteporre `NEXT_PUBLIC_` e non inserirla nel repository o nell'archivio di consegna. È necessaria solo per la lettura protetta dello staging. Non condividere `.env`.
+
+### Stato dei test e limiti noti
+
+- Snapshot verificato: run `fb09bf6c-013f-440c-8de2-c7350551cc02`, 69 fogli, 2.437 righe, 4.627 formule e 5.277 celle con fill.
+- Controllo statico di sintassi: 104 file `.ts/.tsx/.js/.jsx`, nessun errore di parsing.
+- Controllo TypeScript mirato con dichiarazioni temporanee per le dipendenze: superato; **non sostituisce** il build Next.js.
+- Il build completo `npm run build` non è stato verificato in questa sessione perché l'installazione delle dipendenze non è andata a buon fine nell'ambiente di lavoro.
+- Le differenze individuate fra workbook e database sono coerenti con gli aggiornamenti recenti del file Excel. L’audit le riporta come scostamenti fra versioni: per il sito read-only prevalgono i dati dell’ultimo snapshot `READY` del workbook; non bisogna riportare Excel ai valori del DB precedente. La verifica tecnica ancora distinta è il collegamento identità profilo↔codice per eventuali schede senza profilo associato. Non sono stati modificati i record gestionali né pubblicata questa copia su Vercel.
+- La sorgente è la copia locale del pacchetto v100 fornito per il lavoro; non è stata verificata la corrispondenza binaria con l'ultima versione attualmente pubblicata.
+
+Per verificare questa copia su una macchina con accesso ai pacchetti: `npm install`, impostare le variabili server richieste, quindi eseguire `npm run build`. Prima di un rilascio applicare e verificare separatamente l'hardening SQL, controllare i casi di riconciliazione aperti e confrontare questa copia con il sorgente effettivamente pubblicato.
+
+---
+
 ## Aggiornamento v97 (19/10/2026)
 
 - Scorporata la copia personale RAF da `A26/0509` (X!14): 4 copie restano nel lotto in arrivo per le caselle clienti e 1 copia diventa l'articolo autonomo `A26/1161`, `IN_STOCK`, senza assegnazione cliente né vendita.

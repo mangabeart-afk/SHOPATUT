@@ -5,7 +5,6 @@ import { createPortal } from 'react-dom'
 import Link from 'next/link'
 import SignOutButton from '../app/dashboard/sign-out'
 import { createClient } from '../lib/supabase-browser'
-import AdminCacheSync from './admin-cache-sync'
 
 type NavigationProps = {
   role: 'AMMINISTRATORE' | 'CLIENTE'
@@ -17,14 +16,13 @@ type NavigationProps = {
 const adminMenu = [
   ['Dashboard', '/admin'],
   ['Utenti', '/admin/clienti'],
-  ['Inserisci articolo', '/admin/articoli/nuovo'],
   ['Archivio articoli', '/admin/articoli/archivio'],
+  ['PREORDER', '/admin/preorder'],
   ['Pagamenti', '/admin/pagamenti'],
   ['Crediti', '/admin/crediti'],
   ['Spedizioni', '/admin/spedizioni'],
   ['Movimenti', '/admin/movimenti'],
   ['Analisi', '/admin/analisi'],
-  ['Foto da Excel', '/admin/immagini'],
 ]
 
 const clientMenu = [
@@ -47,12 +45,12 @@ const clientMoreMenu = [
 const adminMobileGroups: { title: string; description: string; items: [string, string][] }[] = [
   {
     title: 'Archivio',
-    description: 'Utenti, articoli e inserimento',
+    description: 'Utenti e archivio articoli',
     items: [
       ['Utenti', '/admin/clienti'],
       ['Articoli', '/admin/articoli/archivio'],
-      ['Inserisci articolo', '/admin/articoli/nuovo'],
-    ],
+      ['PREORDER', '/admin/preorder'],
+        ],
   },
   {
     title: 'Movimenti',
@@ -66,11 +64,10 @@ const adminMobileGroups: { title: string; description: string; items: [string, s
   },
   {
     title: 'Analisi',
-    description: 'Statistiche e sessione',
+    description: 'Statistiche gestionali',
     items: [
       ['Analisi', '/admin/analisi'],
-      ['Foto da Excel', '/admin/immagini'],
-    ],
+        ],
   },
 ]
 
@@ -153,7 +150,6 @@ export default function Navigation({ role, active, displayName, email }: Navigat
 
   return (
     <>
-      {role === 'AMMINISTRATORE' && <AdminCacheSync />}
       {role === 'AMMINISTRATORE' && (
         <nav className="admin-bottom-nav" aria-label="Navigazione amministratore">
           <Link href="/admin" prefetch={false} className={active === '/admin' ? 'active' : ''} aria-current={active === '/admin' ? 'page' : undefined}>

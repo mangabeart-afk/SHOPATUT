@@ -1,5 +1,2 @@
 import { redirect } from 'next/navigation'
-
-export default function ArticoliPage() {
-  redirect('/admin/articoli/archivio')
-}
+export default function ArticoliAdminIndex() { redirect('/admin/articoli/archivio') }

@@ -1,151 +1,38 @@
 import { redirect } from 'next/navigation'
-import { createClient } from '../../lib/supabase-server'
 import Navigation from '../../components/navigation'
 import WhatsAppContact from '../../components/whatsapp-contact'
+import ReadOnlyNotice from '../../components/read-only-notice'
+import ReadOnlyTable from '../../components/read-only-table'
+import { findSheet, parseCustomerSheet, getLatestExcelWorkbook, dateLabel, money } from '../../lib/excel-source'
+import { requirePageContext, resolveCustomerCode } from '../../lib/page-context'
 
-const money = (n: number) =>
-  new Intl.NumberFormat('it-IT', {
-    style: 'currency',
-    currency: 'EUR',
-  }).format(n || 0)
+export const dynamic = 'force-dynamic'
+export const revalidate = 0
 
 export default async function CreditiPage() {
-  const supabase = await createClient()
+  const { supabase, user, profile } = await requirePageContext()
+  if (profile.role === 'AMMINISTRATORE') redirect('/admin/crediti')
+  const code = await resolveCustomerCode(supabase, profile)
+  const workbook = await getLatestExcelWorkbook()
+  const sheet = code ? findSheet(workbook, code) : null
+  const customer = sheet ? parseCustomerSheet(sheet) : null
+  // Il workbook non ha una tabella autonoma dei crediti: qui si mostrano le rettifiche esplicite presenti nella scheda utente.
+  const rows = (customer?.transactions || []).filter((item) => /CASHBACK|CREDITO|RIMBORSO/i.test(item.movement) || (item.amount != null && item.amount < 0)).map((item) => ({
+    id: item.id,
+    date: dateLabel(item.date),
+    type: item.movement || 'Rettifica',
+    article: item.article || '—',
+    amount: item.amount != null ? money(item.amount) : '—',
+    paid: item.amountPaid != null ? money(item.amountPaid) : '—',
+    note: item.notes || '—',
+  })).sort((a, b) => b.id.localeCompare(a.id))
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (!user) {
-    redirect('/login')
-  }
-
-  const { data: credits, error } = await supabase
-    .from('credits')
-    .select('id,credit_code,credit_date,amount_eur,used_amount_eur,reason,notes')
-    .order('credit_date', { ascending: false, nullsFirst: false })
-    .order('id', { ascending: false })
-
-  if (error) {
-    return (
-      <main className="shell">
-        <Navigation role="CLIENTE" active="/crediti" email={user.email} />
-        <section className="content">
-          <header className="topbar">
-            <div>
-              <p className="eyebrow">AREA UTENTE</p>
-              <h1>Crediti</h1>
-            </div>
-          <WhatsAppContact /></header>
-
-          <section className="panel">
-            <h2>I miei crediti</h2>
-
-            <div className="empty">
-              Impossibile caricare i crediti.
-            </div>
-          </section>
-        </section>
-      </main>
-    )
-  }
-
-  const rows = credits || []
-
-  const total = rows.reduce(
-    (sum, credit) => sum + Number(credit.amount_eur || 0),
-    0
-  )
-
-  const used = rows.reduce(
-    (sum, credit) => sum + Number(credit.used_amount_eur || 0),
-    0
-  )
-
-  const remaining = Math.max(0, total - used)
-
-  return (
-    <main className="shell">
-      <Navigation role="CLIENTE" active="/crediti" email={user.email} />
-      <section className="content">
-        <header className="topbar">
-          <div>
-            <p className="eyebrow">AREA UTENTE</p>
-            <h1>Crediti</h1>
-          </div>
-        <WhatsAppContact /></header>
-
-        <div className="grid">
-          <div className="card">
-            <div className="muted">Credito totale</div>
-            <strong>{money(total)}</strong>
-            <small>credito assegnato</small>
-          </div>
-
-          <div className="card">
-            <div className="muted">Utilizzato</div>
-            <strong>{money(used)}</strong>
-            <small>credito utilizzato</small>
-          </div>
-
-          <div className="card">
-            <div className="muted">Credito residuo</div>
-            <strong>{money(remaining)}</strong>
-            <small>disponibile</small>
-          </div>
-        </div>
-
-        <section className="panel">
-          <h2>Dettaglio crediti</h2>
-
-          {rows.length === 0 ? (
-            <div className="empty">
-              Nessun credito registrato.
-            </div>
-          ) : (
-            <div className="movement-list">
-              {rows.map((credit) => {
-                const amount = Number(credit.amount_eur || 0)
-                const usedAmount = Number(
-                  credit.used_amount_eur || 0
-                )
-                const residual = Math.max(
-                  0,
-                  amount - usedAmount
-                )
-
-                return (
-                  <div
-                    className="movement"
-                    key={credit.id}
-                  >
-                    <div>
-                      <b>{credit.credit_code || `Credito #${credit.id}`}</b>
-
-                      {credit.credit_date && <span>{new Intl.DateTimeFormat('it-IT',{day:'2-digit',month:'2-digit',year:'2-digit'}).format(new Date(credit.credit_date))}</span>}
-                      {credit.reason && <span>{credit.reason}</span>}
-                      {credit.notes && <span>{credit.notes}</span>}
-                      <span>
-                        Utilizzato: {money(usedAmount)}
-                      </span>
-                    </div>
-
-                    <div>
-                      <span>
-                        Totale: {money(amount)}
-                      </span>
-
-                      <strong>
-                        Residuo: {money(residual)}
-                      </strong>
-                    </div>
-                  </div>
-                )
-              })}
-            </div>
-          )}
-        </section>
-      </section>
-    </main>
-  )
+  return <main className="shell"><Navigation role="CLIENTE" active="/crediti" displayName={profile.display_name} email={user.email} /><section className="content">
+    <header className="topbar"><div><p className="eyebrow">AREA UTENTE</p><h1>Crediti e rettifiche</h1></div><WhatsAppContact /></header>
+    {!customer ? <section className="panel"><div className="empty">Scheda Excel non associata al profilo.</div></section> : <>
+      <section className="grid"><div className="card"><div className="muted">Saldo indicato in Excel</div><strong>{money(customer.balance)}</strong></div></section>
+      <section className="panel"><h2>Rettifiche registrate</h2><p className="muted">Questa scheda riporta solo righe esplicite di cashback, credito o rimborso. Il workbook non contiene una tabella separata di crediti residui.</p><ReadOnlyTable columns={[{key:'date',label:'Data'},{key:'type',label:'Tipo'},{key:'article',label:'Riferimento'},{key:'amount',label:'Importo',align:'right'},{key:'paid',label:'Pagato',align:'right'},{key:'note',label:'Note'}]} rows={rows} emptyLabel="Nessuna rettifica di credito esplicita trovata nella scheda Excel." /></section>
+      <section className="panel"><ReadOnlyNotice /></section>
+    </>}
+  </section></main>
 }

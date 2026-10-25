@@ -1,220 +1,36 @@
 import { redirect } from 'next/navigation'
-import { createClient } from '../../lib/supabase-server'
 import Navigation from '../../components/navigation'
 import WhatsAppContact from '../../components/whatsapp-contact'
-import ShipmentItemsModal from '../../components/shipment-items-modal'
-import ShippingAddressForm from '../../components/shipping-address-form'
+import ReadOnlyNotice from '../../components/read-only-notice'
+import ReadOnlyTable from '../../components/read-only-table'
+import { findSheet, parseCustomerSheet, getLatestExcelWorkbook, dateLabel, money } from '../../lib/excel-source'
+import { requirePageContext, resolveCustomerCode } from '../../lib/page-context'
 
-const formatDate = (value: string | null) => {
-  if (!value) return '—'
-
-  return new Intl.DateTimeFormat('it-IT', {
-    day: '2-digit',
-    month: '2-digit',
-    year: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-  }).format(new Date(value))
-}
-
-const statusLabel = (status: string) =>
-  status.replaceAll('_', ' ')
-
-const trackingUrl = (courier: string | null, tracking: string | null) => {
-  if (!courier || !tracking) return null
-
-  const code = encodeURIComponent(tracking.trim())
-
-  switch (courier.toUpperCase()) {
-    case 'GLS':
-      return `https://www.gls-italy.com/it/servizi-per-destinatari/ricerca-spedizione?match=${code}`
-    case 'DHL':
-      return `https://www.dhl.com/it-it/home/tracking.html?tracking-id=${code}`
-    case 'UPS':
-      return `https://www.ups.com/track?loc=it_IT&tracknum=${code}`
-    case 'POSTE ITALIANE':
-      return `https://www.poste.it/cerca-spedizioni?codice=${code}`
-    case 'BRT':
-      return `https://vas.brt.it/vas/sped_det_show.hsm?N_SHIPMENT=${code}`
-    case 'SDA':
-      return `https://www.sda.it/wps/portal/sdait.home/servizi_online/ricerca_spedizione?locale=it&reference=${code}`
-    case 'INPOST':
-      return `https://inpost.it/ricerca-spedizione?tracking=${code}`
-    default:
-      return null
-  }
-}
+export const dynamic = 'force-dynamic'
+export const revalidate = 0
 
 export default async function SpedizioniPage() {
-  const supabase = await createClient()
+  const { supabase, user, profile } = await requirePageContext()
+  if (profile.role === 'AMMINISTRATORE') redirect('/admin/spedizioni')
+  const code = await resolveCustomerCode(supabase, profile)
+  const workbook = await getLatestExcelWorkbook()
+  const sheet = code ? findSheet(workbook, code) : null
+  const customer = sheet ? parseCustomerSheet(sheet) : null
+  const rows = (customer?.items || []).filter((item) => item.status === 'SPEDITO').map((item) => ({
+    id: item.id,
+    date: dateLabel(item.date),
+    movement: item.movement || 'Ordine',
+    article: item.article,
+    quantity: String(item.quantity),
+    amount: item.amount != null ? money(item.amount) : '—',
+  })).sort((a, b) => b.id.localeCompare(a.id))
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (!user) {
-    redirect('/login')
-  }
-
-  const { data: profile } = await supabase
-    .from('profiles')
-    .select('mailbox_id,customer_id')
-    .eq('user_id', user.id)
-    .maybeSingle()
-
-  const { data: shippingCustomer } = profile?.customer_id
-    ? await supabase
-        .from('customers')
-        .select('shipping_address,shipping_postal_code,shipping_city,shipping_country')
-        .eq('id', profile.customer_id)
-        .maybeSingle()
-    : { data: null }
-
-  const shippingAddressForm = shippingCustomer ? (
-    <ShippingAddressForm
-      initialAddress={shippingCustomer.shipping_address}
-      initialPostalCode={shippingCustomer.shipping_postal_code}
-      initialCity={shippingCustomer.shipping_city}
-      initialCountry={shippingCustomer.shipping_country}
-    />
-  ) : null
-
-  if (!profile?.mailbox_id) {
-    return (
-      <main className="shell">
-        <Navigation role="CLIENTE" active="/spedizioni" email={user.email} />
-        <section className="content">
-          <header className="topbar">
-            <div>
-              <p className="eyebrow">AREA UTENTE</p>
-              <h1>Spedizioni</h1>
-            </div>
-          <WhatsAppContact /></header>
-
-          {shippingAddressForm}
-          <section className="panel">
-            <h2>Le mie spedizioni</h2>
-            <div className="empty">Nessuna casella associata all’utente.</div>
-          </section>
-        </section>
-      </main>
-    )
-  }
-
-  const { data: shipments, error } = await supabase
-    .from('shipments')
-    .select(`
-      id,
-      shipment_code,
-      shipped_at,
-      courier,
-      tracking,
-      status,
-      shipment_items (
-        id,
-        quantity_shipped,
-        article_id,
-        articles (
-          article_code,
-          series,
-          detail
-        )
-      )
-    `)
-    .eq('mailbox_id', profile.mailbox_id)
-    .order('created_at', { ascending: false }).order('id', { ascending: false })
-
-  if (error) {
-    return (
-      <main className="shell">
-        <Navigation role="CLIENTE" active="/spedizioni" email={user.email} />
-        <section className="content">
-          <header className="topbar">
-            <div>
-              <p className="eyebrow">AREA UTENTE</p>
-              <h1>Spedizioni</h1>
-            </div>
-          <WhatsAppContact /></header>
-
-          {shippingAddressForm}
-          <section className="panel">
-            <h2>Le mie spedizioni</h2>
-            <div className="empty">Impossibile caricare le spedizioni.</div>
-          </section>
-        </section>
-      </main>
-    )
-  }
-
-  const rows = shipments || []
-
-  return (
-    <main className="shell">
-      <Navigation role="CLIENTE" active="/spedizioni" email={user.email} />
-      <section className="content">
-        <header className="topbar">
-          <div>
-            <p className="eyebrow">AREA UTENTE</p>
-            <h1>Spedizioni</h1>
-          </div>
-        <WhatsAppContact /></header>
-
-        {shippingAddressForm}
-
-        <section className="panel">
-          <h2>Le mie spedizioni</h2>
-
-          {rows.length === 0 ? (
-            <div className="empty">Nessuna spedizione registrata.</div>
-          ) : (
-            <div className="movement-list">
-              {rows.map((shipment: any) => {
-                const url = trackingUrl(shipment.courier, shipment.tracking)
-
-                return (
-                  <div className="movement" key={shipment.id}>
-                    <div>
-                      <b>Spedizione {shipment.shipment_code || '—'}</b>
-
-                      <span>
-                        Stato: <strong>{statusLabel(shipment.status)}</strong>
-                      </span>
-
-                      {shipment.courier && (
-                        <span>Corriere: {shipment.courier}</span>
-                      )}
-
-                      {shipment.tracking && (
-                        <span>
-                          Tracking: <strong>{shipment.tracking}</strong>
-                          {url && (
-                            <> · <a href={url} target="_blank" rel="noreferrer">Traccia spedizione ↗</a></>
-                          )}
-                        </span>
-                      )}
-
-                      <span>
-                        Data spedizione: {formatDate(shipment.shipped_at)}
-                      </span>
-
-                      <ShipmentItemsModal
-                        shipmentCode={shipment.shipment_code || `#${shipment.id}`}
-                        items={(shipment.shipment_items || []).map((item: any) => ({
-                          id: item.id,
-                          quantity_shipped: item.quantity_shipped,
-                          article_code: item.articles?.article_code || null,
-                          series: item.articles?.series || null,
-                          detail: item.articles?.detail || null,
-                        }))}
-                      />
-                    </div>
-                  </div>
-                )
-              })}
-            </div>
-          )}
-        </section>
-      </section>
-    </main>
-  )
+  return <main className="shell"><Navigation role="CLIENTE" active="/spedizioni" displayName={profile.display_name} email={user.email} /><section className="content">
+    <header className="topbar"><div><p className="eyebrow">AREA UTENTE</p><h1>Spedizioni</h1></div><WhatsAppContact /></header>
+    {!customer ? <section className="panel"><div className="empty">Scheda Excel non associata al profilo.</div></section> : <>
+      <section className="grid"><div className="card"><div className="muted">Unità spedite (scheda Excel)</div><strong>{customer.shippedUnits}</strong></div><div className="card"><div className="muted">Saldo da pagare</div><strong>{money(customer.balance)}</strong></div></section>
+      <section className="panel"><h2>Articoli segnati SPEDITO</h2><ReadOnlyTable columns={[{key:'date',label:'Data'},{key:'article',label:'Articolo'},{key:'movement',label:'Movimento'},{key:'quantity',label:'Q.tà',align:'right'},{key:'amount',label:'Importo',align:'right'}]} rows={rows} emptyLabel="Nessun articolo con stato SPEDITO trovato nella scheda Excel." /></section>
+      <section className="panel"><ReadOnlyNotice /></section>
+    </>}
+  </section></main>
 }

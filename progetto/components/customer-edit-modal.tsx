@@ -1,7 +1,8 @@
 'use client'
 
-import { FormEvent, useState } from 'react'
+import { FormEvent, useRef, useState } from 'react'
 import ModalPortal from './modal-portal'
+import ViewportConfirmDialog from './viewport-confirm-dialog'
 
 type Props = {
   action: (formData: FormData) => void | Promise<void>
@@ -11,6 +12,16 @@ type Props = {
 
 export default function CustomerEditModal({ action, customer, mailbox }: Props) {
   const [open, setOpen] = useState(false)
+  const [emailChangeConfirmOpen, setEmailChangeConfirmOpen] = useState(false)
+  const formRef = useRef<HTMLFormElement | null>(null)
+  const emailChangeConfirmed = useRef(false)
+
+  const confirmEmailChange = () => {
+    emailChangeConfirmed.current = true
+    setEmailChangeConfirmOpen(false)
+    formRef.current?.requestSubmit()
+  }
+
   return (
     <>
       <button type="button" className="back-button" onClick={() => setOpen(true)}>Modifica dati utente</button>
@@ -22,6 +33,7 @@ export default function CustomerEditModal({ action, customer, mailbox }: Props) 
               <button type="button" className="modal-close" onClick={() => setOpen(false)} aria-label="Chiudi">×</button>
             </div>
             <form
+              ref={formRef}
               action={action}
               className="form"
               onSubmit={(event: FormEvent<HTMLFormElement>) => {
@@ -29,16 +41,13 @@ export default function CustomerEditModal({ action, customer, mailbox }: Props) 
                 const originalEmail = String(customer.email || '').trim().toLowerCase()
                 const nextEmail = String(emailInput?.value || '').trim().toLowerCase()
 
-                if (originalEmail !== nextEmail && nextEmail) {
-                  const confirmed = window.confirm(
-                    'Stai modificando l\'indirizzo email dell’utente. Al nuovo indirizzo verrà inviato un messaggio per impostare una nuova password. Continuare?'
-                  )
-                  if (!confirmed) {
-                    event.preventDefault()
-                    return
-                  }
+                if (originalEmail !== nextEmail && nextEmail && !emailChangeConfirmed.current) {
+                  event.preventDefault()
+                  setEmailChangeConfirmOpen(true)
+                  return
                 }
 
+                emailChangeConfirmed.current = false
                 setOpen(false)
               }}
             >
@@ -61,6 +70,15 @@ export default function CustomerEditModal({ action, customer, mailbox }: Props) 
             </form>
           </div>
         </div></ModalPortal>
+      )}
+      {emailChangeConfirmOpen && (
+        <ViewportConfirmDialog
+          title="Conferma cambio email"
+          message="Stai modificando l'indirizzo email dell’utente. Al nuovo indirizzo verrà inviato un messaggio per impostare una nuova password. Continuare?"
+          confirmLabel="Continua"
+          onCancel={() => setEmailChangeConfirmOpen(false)}
+          onConfirm={confirmEmailChange}
+        />
       )}
     </>
   )

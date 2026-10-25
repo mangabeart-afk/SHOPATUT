@@ -1,46 +1,18 @@
-import { redirect } from 'next/navigation'
-import Navigation from '../../../components/navigation'
-import { createClient } from '../../../lib/supabase-server'
-import PhotoUrlSync from './photo-url-sync'
+import Link from 'next/link'
+import AdminWorkbookLayout from '../../../components/admin-workbook-layout'
+import ReadOnlyTable from '../../../components/read-only-table'
+import { getLatestExcelWorkbook, getWorkbookArticles, money, dateLabel, searchText } from '../../../lib/excel-source'
+import { requirePageContext } from '../../../lib/page-context'
 
 export const dynamic = 'force-dynamic'
 export const revalidate = 0
-
-export default async function AdminPhotoImportPage() {
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) redirect('/login')
-  const { data: profile } = await supabase
-    .from('profiles')
-    .select('role,display_name')
-    .eq('user_id', user.id)
-    .maybeSingle()
-  if (profile?.role !== 'AMMINISTRATORE') redirect('/dashboard')
-
-  return (
-    <main className="shell">
-      <Navigation role="AMMINISTRATORE" active="/admin/immagini" displayName={profile?.display_name} email={user.email} />
-      <section className="content">
-        <header className="topbar">
-          <div>
-            <p className="eyebrow">AMMINISTRAZIONE · EXCEL / SUPABASE</p>
-            <h1>Sincronizza foto articoli</h1>
-          </div>
-          <a className="back-button" href="/admin/articoli/archivio">← Archivio articoli</a>
-        </header>
-
-        <section className="panel">
-          <h2>1. Prepara il file Excel</h2>
-          <p>Nel file <strong>MangaBEART_riconciliazione_Supabase.xlsx</strong>, inserisci l’intestazione <code>IMMAGINE_URL</code> nella riga 2 delle schede X, Y e Z, rispettivamente in Q2, U2 e Z2. Incolla sotto l’intestazione il link diretto alla foto di ogni articolo. Non inserire righe, non riordinare le schede e non cancellare le righe originali: il collegamento al database usa il nome della scheda e il numero della riga originale.</p>
-          <p>Il collegamento deve essere un URL <code>https://</code> o <code>http://</code> accessibile dall’applicazione. Le celle vuote non modificano le foto esistenti.</p>
-        </section>
-
-        <section className="panel">
-          <h2>2. Verifica e sincronizza</h2>
-          <p>Carica il file Excel aggiornato. La prima operazione mostra un’anteprima senza scrivere nel database. Solo dopo aver controllato i conteggi potrai confermare l’importazione.</p>
-          <PhotoUrlSync />
-        </section>
-      </section>
-    </main>
-  )
+export default async function AdminPhotoImportPage({ searchParams }: { searchParams: Promise<{ search?: string }> }) {
+  const { user, profile } = await requirePageContext('AMMINISTRATORE')
+  const { search = '' } = await searchParams
+  const workbook = await getLatestExcelWorkbook()
+  const rows = getWorkbookArticles(workbook).filter((item) => item.photoUrl && searchText([item.codeLabel,item.sheet,item.series,item.detail,item.status,...item.customerCodes], search)).map((item) => ({id:item.id,code:item.codeLabel,sheet:`${item.sheet} · ${item.excelRow}`,date:dateLabel(item.date),series:item.series,detail:item.detail,status:item.status,customer:item.customerCodes.join(', ')||'—',link:<a href={item.photoUrl || '#'} target="_blank" rel="noreferrer">Apri originale ↗</a>}))
+  return <AdminWorkbookLayout active="/admin/immagini" title="Foto da Excel" description="Consultazione degli URL immagine letti da X, Y e Z. Caricamento e modifica delle foto dal sito sono disattivati." displayName={profile.display_name} email={user.email}>
+    <section className="panel"><form action="/admin/immagini" method="get" className="form"><label>Cerca articolo o utente<input type="search" name="search" defaultValue={search} placeholder="Cerca immagine…" /></label><button type="submit">Cerca</button></form></section>
+    <section className="panel"><h2>Immagini disponibili ({rows.length})</h2><ReadOnlyTable columns={[{key:'code',label:'Chiave'},{key:'sheet',label:'Fonte'},{key:'date',label:'Data'},{key:'series',label:'Serie'},{key:'detail',label:'Dettaglio'},{key:'status',label:'Stato'},{key:'customer',label:'Utenti'},{key:'link',label:'URL immagine'}]} rows={rows.slice(0,1000)} />{rows.length>1000 && <p className="muted">Mostrate le prime 1.000 immagini: applica la ricerca per filtrare.</p>}</section>
+  </AdminWorkbookLayout>
 }
