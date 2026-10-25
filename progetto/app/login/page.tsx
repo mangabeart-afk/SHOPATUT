@@ -68,7 +68,7 @@ function LoginForm() {
       {visibleError && <div className="error" role="alert">{visibleError}</div>}
       <button type="submit" disabled={loading}>{loading ? 'Accesso…' : 'Accedi'}</button>
     </form>
-    <div className="auth-links"><a href="/register">Registrati</a><a href="/recupera-password">Recupera password</a></div>
+    <div className="auth-links"><a href="/recupera-password">Recupera password</a></div>
   </section></main>
 }
 
